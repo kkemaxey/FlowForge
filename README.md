@@ -1,7 +1,7 @@
 # FlowForge Checkpoint API
 
-A standalone FastAPI server for the CSC 480 individual checkpoint (FlowForge
-capstone). It exposes a single read-only endpoint, `GET /api/workers`, which
+A standalone FastAPI server for the individual checkpoint. 
+It exposes a single read-only endpoint, `GET /api/workers`, which
 returns a hard-coded list of warehouse workers and robots — the workforce
 roster the FlowForge operations console will eventually render live. It is
 hard-coded for now and will be backed by a database later in the semester.
