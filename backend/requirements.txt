@@ -1,0 +1,5 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.54
+pytest==8.4.2
+pytest-cov==6.0.0

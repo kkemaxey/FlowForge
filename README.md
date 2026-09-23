@@ -1,6 +1,9 @@
 # FlowForge Server
 
-A FastAPI server for the FlowForge Warehouse Execution Control Tower project.
+Warehouse Execution Control Tower. This repository currently holds the
+FastAPI backend for the warehouse operations API; the
+Next.js frontend lives alongside it in [`frontend/`](frontend/) and is
+not required to run the backend below.
 
 This server currently provides a GET endpoint that returns hard-coded warehouse worker and robot data.
 
@@ -54,8 +57,11 @@ Install the required packages:
 python3 -m pip install -r requirements.txt
 ```
 
-## Run the Server
-Start the FastAPI server with:
+The backend reads its database connection from the `DATABASE_URL` environment
+variable. If it is not set, it uses the local SQLite database
+`sqlite:///./app.db` for development.
+
+### Run
 
 ```
 python3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
@@ -139,6 +145,25 @@ curl http://127.0.0.1:8000/api/workers
   }
 ]
 ```
+
+Workers can be created through the write endpoint:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/workers \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Packing Bot","type":"robot","speed":5,"cur_x":1,"cur_y":4}'
+```
+
+The service layer owns worker persistence and default seeding. Run the unit
+and integration tests with coverage from `backend/`:
+
+```bash
+python -m pytest --cov=app --cov-report=term-missing -q
+```
+
+The current application version is `1.0.0`; release changes are recorded in
+[`CHANGELOG.md`](CHANGELOG.md) and the GitVersion configuration is in
+[`GitVersion.yaml`](GitVersion.yaml).
 
 ## Interactive API Documentation
 FastAPI automatically provides interactive documentation at:
