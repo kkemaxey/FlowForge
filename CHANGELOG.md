@@ -7,6 +7,25 @@ All notable changes to this branch are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-29
+
+Narrowed to two workforce endpoints so the knowledge-check demo is short and focused.
+
+### Added
+- `workers` table from the course data model (`id, name, type, speed, cur_x, cur_y, status,
+  enabled`).
+- `POST /api/workers`: add a human or robot worker. New workers start `idle` and enabled at the
+  dock (0, 0) unless given a position.
+- `GET /api/workers`: list workers in the order they were added, with optional `?type=` and
+  `?status=` filters.
+- Business rules: speed limit of 2.0 for humans and 4.0 for robots, positions must be on the
+  20 × 12 grid, a disabled worker cannot be busy, and names are unique ignoring case (409).
+- Unit tests for the worker service and request rules; integration tests for both endpoints.
+
+### Removed
+- Orders, pick tasks, assignments and the live board (`/api/orders`, `/api/tasks`,
+  `/api/board`), along with their tables and tests. They remain in the 0.3.0 history.
+
 ## [0.3.0] - 2026-09-29
 
 Matches the course data model so this branch lines up with the rest of the team.

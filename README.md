@@ -1,10 +1,9 @@
-# FlowForge — Pick Tasks & Live Board API (`jayden_work`)
+# FlowForge — Workforce API (`jayden_work`)
 
-FlowForge is a warehouse control tower for CSC 480. This branch is the backend slice behind the
-supervisor's **live board**: order intake that generates pick tasks, the task lifecycle, and a
-board endpoint that groups tasks by status and reports WIP, late orders and throughput. Tables
-follow the course data model (`orders`, `order_lines`, `tasks`, `assignments`) in MySQL.
-The team's Next.js scaffold lives in [`frontend/`](frontend/) and isn't needed to run the backend.
+FlowForge is a warehouse control tower for CSC 480. This branch is a small backend slice for
+the workforce: add a human or robot worker, and list everyone on the floor. Workers are stored in
+the course data model's `workers` table in MySQL. The team's Next.js scaffold lives in
+[`frontend/`](frontend/) and isn't needed to run the backend.
 
 - Version: see [`GitVersion.yaml`](GitVersion.yaml) · changes: [`CHANGELOG.md`](CHANGELOG.md)
 - Design doc (MVP, stack, API contract, features): [`docs/DESIGN.md`](docs/DESIGN.md)
@@ -38,30 +37,26 @@ From `backend/` with the virtual environment active:
 uvicorn app.main:create_app --factory --port 8000
 ```
 
-- Health check: http://127.0.0.1:8000/health → `{"status":"ok","version":"0.3.0","database":"connected"}`
+- Health check: http://127.0.0.1:8000/health → `{"status":"ok","version":"0.4.0","database":"connected"}`
 - Swagger UI: http://127.0.0.1:8000/docs
 
 Quick demo:
 
 ```bash
-curl -X POST localhost:8000/api/orders -H 'Content-Type: application/json' \
-  -d '{"due_at":"2030-01-01T12:00:00Z","lines":[{"sku_id":"SKU-88213","qty":4,"location_id":"A1-01"}]}'
-curl -X PATCH localhost:8000/api/tasks/1/status -H 'Content-Type: application/json' \
-  -d '{"status":"assigned","worker_id":2}'
-curl localhost:8000/api/board
+curl -X POST localhost:8000/api/workers -H 'Content-Type: application/json' \
+  -d '{"name":"Maria Lopez","type":"human","speed":1.2,"cur_x":3,"cur_y":5}'
+curl -X POST localhost:8000/api/workers -H 'Content-Type: application/json' \
+  -d '{"name":"PickBot-7","type":"robot","speed":3.5}'
+curl localhost:8000/api/workers
+curl 'localhost:8000/api/workers?type=robot'
 ```
 
 ## Endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/orders` | Take in an order; generates one task per line |
-| GET | `/api/orders/{id}` | Get an order and its tasks |
-| POST | `/api/orders/{id}/expedite` | Expedite an order |
-| GET | `/api/tasks` | List tasks (`?status=open`) |
-| GET | `/api/tasks/{id}` | Get one task |
-| PATCH | `/api/tasks/{id}/status` | Move a task through its lifecycle |
-| GET | `/api/board` | Live supervisor board |
+| POST | `/api/workers` | Add a worker (201; 409 duplicate name; 422 invalid input) |
+| GET | `/api/workers` | List workers (`?type=robot`, `?status=idle`) |
 | GET | `/health` | Version and database status |
 
 ## Tests
@@ -79,10 +74,10 @@ database because they drop their tables afterwards.
 
 ```text
 backend/
-  app/core/            settings, database, request logging, errors, version
-  app/modules/orders/  task and order rules, service, board builder, repository, router
-  tests/unit/          business-layer tests (no database)
-  tests/integration/   API tests through the real app and database
+  app/core/             settings, database, request logging, errors, version
+  app/modules/workforce/ worker rules, service, repository, router
+  tests/unit/           business-layer tests (no database)
+  tests/integration/    API tests through the real app and database
 docs/DESIGN.md         design doc
 GitVersion.yaml        application version
 CHANGELOG.md

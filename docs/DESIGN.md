@@ -1,7 +1,7 @@
 # FlowForge — Design Doc (initial draft)
 
 **Author:** Jayden Keaton (Frontend / Console Support: live board, throughput/WIP views)
-**Course:** CSC 480, Fall 2026 · **Version:** 0.3.0 · **Code freeze:** Dec 1, 2026
+**Course:** CSC 480, Fall 2026 · **Version:** 0.4.0 · **Code freeze:** Dec 1, 2026
 
 ## Problem
 
@@ -25,8 +25,8 @@ stuck or blocked so Maria can reassign or expedite before an order misses its wi
 5. **Reassign and expedite** controls on the board.
 6. **Workforce CRUD** and **minimal auth** with a single supervisor role.
 
-This branch delivers item 1 (intake and task generation), item 2, item 4 and expedite from item 5
-as a working backend slice.
+This branch delivers the create and list half of item 6 (workforce management) as a working
+backend slice: a supervisor can add a human or robot worker and see everyone on the floor.
 
 ## Stack
 
@@ -43,118 +43,103 @@ Rationale for each choice is in the team Architecture Decision Record.
 
 ## Data model
 
-Table and column names follow the course spec, so this branch merges cleanly with teammates' work.
+The `workers` table follows the course spec, so this branch merges cleanly with teammates' work.
 
 ```
-orders(id, created_at, due_at, status, priority)   status: new | in_progress | complete | late
-order_lines(id, order_id, sku_id, qty)
-tasks(id, order_line_id, sku_id, location_id, qty, status)   status: open | assigned | picked | exception
-assignments(id, task_id, worker_id, assigned_at, completed_at)
+workers(id, name, type, speed, cur_x, cur_y, status, enabled)
+  type:   human | robot
+  status: idle | busy
 ```
 
-`priority` (`normal` | `expedite`) is the one addition, so a supervisor can expedite an order.
-`late` is worked out when the order is read: any unfinished order past `due_at`. The `locations`,
-`skus` and `inventory` tables arrive with the instructor's seed; until then an order line carries
-its `location_id` (for example `A1-01`).
+`name` is unique (ignoring case). `cur_x` and `cur_y` are a cell on the 20 × 12 floor grid from
+the course map seed; new workers start at the dock, (0, 0), unless a position is given.
 
 ## Backend structure
 
 ```
 backend/app/
-  core/            config (env vars), database, logging, errors, version, clock
-  modules/orders/
-    task_states.py   task lifecycle rules     ─┐
-    order_status.py  order status rules        │
-    service.py       intake + business rules   ├─ business layer (unit tested)
-    board.py         live-board builder       ─┘
-    repository.py    SQLAlchemy queries (ORM only, bound parameters)
-    router.py        HTTP endpoints
+  core/               config (env vars), database, logging, errors, version
+  modules/workforce/
+    schema.py         request/response shapes, field rules (grid bounds, allowed values)  ─┐ business layer
+    service.py        business rules: speed limits, no duplicate names, busy needs enabled ─┘ (unit tested)
+    repository.py     SQLAlchemy queries (ORM only, bound parameters)
+    router.py         HTTP endpoints
 ```
 
 The router only translates HTTP to service calls. The service never touches SQL; it talks to a
 repository, which unit tests replace with an in-memory fake.
 
+## Business rules
+
+| Rule | Error |
+|---|---|
+| `name` required, whitespace tidied, max 60 characters | 422 |
+| `type` is `human` or `robot`; `status` is `idle` or `busy` | 422 |
+| `speed` > 0, at most **2.0** for a human and **4.0** for a robot (grid cells per second) | 422 |
+| `cur_x` in 0–19, `cur_y` in 0–11 | 422 |
+| A disabled worker cannot be `busy` | 422 |
+| No two workers share a name (case-insensitive) | 409 |
+
 ## API contract examples
 
 All errors share one shape: `{"error": {"code": "...", "message": "...", "details": [...]}}`.
-Times are ISO 8601 UTC with a trailing `Z`.
 
-### `POST /api/orders` — take in an order → `201 Created`
+### `POST /api/workers` — add a worker → `201 Created`
 
 ```json
-// request
-{ "due_at": "2026-10-01T15:30:00Z", "priority": "normal",
-  "lines": [ { "sku_id": "SKU-88213", "qty": 4, "location_id": "A1-01" },
-             { "sku_id": "SKU-10007", "qty": 1, "location_id": "C4-11" } ] }
+// request (cur_x, cur_y, status and enabled are optional)
+{ "name": "Maria Lopez", "type": "human", "speed": 1.2, "cur_x": 3, "cur_y": 5 }
 
-// response: the order plus one generated task per line
-{ "id": 1, "status": "new", "priority": "normal",
-  "created_at": "2026-10-01T14:50:12Z", "due_at": "2026-10-01T15:30:00Z",
-  "tasks": [ { "id": 1, "order_id": 1, "order_line_id": 1, "sku_id": "SKU-88213",
-               "location_id": "A1-01", "qty": 4, "status": "open",
-               "worker_id": null, "assigned_at": null, "completed_at": null },
-             { "id": 2, "...": "..." } ] }
+// response
+{ "id": 1, "name": "Maria Lopez", "type": "human", "speed": 1.2,
+  "cur_x": 3, "cur_y": 5, "status": "idle", "enabled": true }
 ```
 
-`422` if a field is invalid (e.g. `location_id` not like `A1-01`, `qty` ≤ 0, no lines, `due_at` in the past).
-
-### `PATCH /api/tasks/{id}/status` — move through the lifecycle → `200 OK`
+`409` if the name is taken:
 
 ```json
-{ "status": "assigned", "worker_id": 2 }   // records an assignment
-{ "status": "picked" }                     // completes it; order becomes complete when all tasks are
-{ "status": "exception" }                  // stockout or jam
-{ "status": "open" }                       // back to the pool for reassignment
+{ "error": { "code": "conflict", "message": "A worker named 'maria lopez' already exists." } }
 ```
 
-`404` unknown task · `409` transition not allowed:
+`422` for invalid input, naming each bad field:
 
 ```json
-{ "error": { "code": "invalid_transition",
-             "message": "Cannot move a task from 'open' to 'picked'." } }
+{ "error": { "code": "validation_failed", "message": "Request body or parameters are invalid.",
+             "details": [ { "field": "body.type", "message": "Input should be 'human' or 'robot'" },
+                          { "field": "body.cur_x", "message": "Input should be less than 20" } ] } }
 ```
 
-### `GET /api/board` — live supervisor board → `200 OK`
+### `GET /api/workers` — list workers → `200 OK`
+
+Optional filters: `?type=human|robot` and `?status=idle|busy`. Workers come back in the order
+they were added.
 
 ```json
-{ "generated_at": "2026-10-01T14:55:00Z",
-  "summary": { "total_tasks": 3, "work_in_progress": 1, "exceptions": 0,
-               "late_orders": 1, "picked_last_hour": 0 },
-  "orders_by_status": { "new": 1, "in_progress": 1, "complete": 0, "late": 1 },
-  "columns": {
-    "open": [ { "task_id": 2, "order_id": 2, "priority": "expedite", "is_late": false,
-                "minutes_until_due": 85, "location_id": "C4-11", "...": "..." },
-              { "task_id": 1, "order_id": 1, "priority": "normal", "is_late": true,
-                "minutes_until_due": -4, "...": "..." } ],
-    "assigned": [ { "task_id": 3, "worker_id": 5, "...": "..." } ],
-    "picked": [], "exception": [] } }
+[ { "id": 1, "name": "Maria Lopez", "type": "human", "speed": 1.2,
+    "cur_x": 3, "cur_y": 5, "status": "idle", "enabled": true },
+  { "id": 2, "name": "PickBot-7", "type": "robot", "speed": 3.5,
+    "cur_x": 0, "cur_y": 0, "status": "idle", "enabled": true } ]
 ```
 
 ### Other endpoints
 
 | Method | Path | Purpose | Codes |
 |---|---|---|---|
-| GET | `/api/orders/{id}` | An order and its tasks | 200, 404 |
-| POST | `/api/orders/{id}/expedite` | Raise an order to expedite priority | 200, 404, 422 |
-| GET | `/api/tasks?status=open` | List tasks, optional status filter | 200, 422 |
-| GET | `/api/tasks/{id}` | One task | 200, 404 |
 | GET | `/health` | Version and database connectivity | 200, 503 |
 
 Interactive docs: `http://127.0.0.1:8000/docs` while the server runs.
 
 ## Features under consideration
 
+- Edit, disable and remove workers (the rest of workforce CRUD)
 - Live board that refreshes on its own (polling first, WebSocket/SSE later)
 - Throughput and WIP charts over the shift
 - Late-order and stockout alerts
+- Order intake that generates pick tasks
 - Drag-and-drop reassignment on the board
-- Expedite / de-expedite controls
 - Grid map of worker and robot positions
 - Greedy task assignment, then smarter pathfinding ("beat the greedy")
-- Wave / batch planning
-- Exception handling flow (bin empty, damaged item, can't find SKU)
 - Worker simulator for demos
-- Workforce management (add, edit, disable workers and robots)
 - Firebase login with a supervisor role
 - Shift summary report / CSV export
 
