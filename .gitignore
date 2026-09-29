@@ -14,3 +14,12 @@ __pycache__/
 
 # IDE files
 .vscode/
+
+# Keep the placeholder env file tracked
+!.env.example
+
+# Local SQLite databases and test artifacts
+*.db
+.coverage
+htmlcov/
+.pytest_cache/
