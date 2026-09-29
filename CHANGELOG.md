@@ -14,3 +14,4 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - `GitVersion.yaml` as the single source of the application version.
 - pytest setup with separate unit and integration suites.
 - Task lifecycle state machine (open → assigned → picked, with exception and reassignment paths).
+- Greedy nearest-task assigner (Manhattan distance), translated from the course baseline.
