@@ -18,3 +18,8 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - Workforce service: grid-bounds validation, server-owned status, and no deleting busy workers.
 - Metrics service: throughput per hour, units picked, exceptions, WIP, and worker status counts from the event stream.
 - MySQL persistence via SQLAlchemy 2.0: `workers` and `events` tables and repositories.
+- `GET /health` reporting version and database connectivity.
+- Request logging (arrival and completion, with `X-Request-ID`) and a consistent JSON error envelope.
+
+### Removed
+- Hard-coded mock worker list from the original `app/main.py`.
