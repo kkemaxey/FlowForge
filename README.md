@@ -1,128 +1,87 @@
-# FlowForge Checkpoint API
+# FlowForge — Pick Tasks & Live Board API (`jayden_work`)
 
-A standalone FastAPI server for the individual checkpoint. 
-It exposes a single read-only endpoint, `GET /api/workers`, which
-returns a hard-coded list of warehouse workers and robots — the workforce
-roster the FlowForge operations console will eventually render live. It is
-hard-coded for now and will be backed by a database later in the semester.
+FlowForge is a warehouse control tower for CSC 480. This branch is the backend slice behind the
+supervisor's **live board**: pick tasks stored in MySQL, a lifecycle state machine, and a board
+endpoint that groups tasks by status and reports WIP, late tasks and throughput.
 
-No database, authentication, or frontend is required to run the server below.
+- Version: see [`GitVersion.yaml`](GitVersion.yaml) · changes: [`CHANGELOG.md`](CHANGELOG.md)
+- Design doc (MVP, stack, API contract, features): [`docs/DESIGN.md`](docs/DESIGN.md)
 
 ## Prerequisites
 
-- macOS
-- Python 3.14 (developed and tested on Python 3.14.6 — verify with the command below)
-- `pip` and Python's built-in `venv` module (both ship with Python)
+- Python 3.11+ (developed on 3.14.6)
+- Docker Desktop (for the local MySQL database)
 
-No other tools need to be installed ahead of time.
-
-Verify your Python version:
+## Setup
 
 ```bash
-python3 --version
-```
-
-## Project Structure
-
-```text
-flowforge-checkpoint/
-├── app/
-│   ├── __init__.py
-│   └── main.py          # FastAPI app + the /api/workers endpoint
-├── requirements.txt     # pinned dependencies
-├── README.md
-└── .gitignore
-```
-
-## Install
-
-From the repository root (`flowforge-checkpoint/`):
-
-```bash
+cd backend
 python3 -m venv .venv
-```
-
-Activate the virtual environment:
-
-```bash
-# macOS / Linux
 source .venv/bin/activate
-
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-
-# Windows (Git Bash)
-source .venv/Scripts/activate
+pip install -r requirements-dev.txt
+cp ../.env.example .env        # then replace every "replace-me" value
 ```
 
-Then install dependencies:
+Start MySQL (from the repository root):
 
 ```bash
-pip install -r requirements.txt
+docker compose up -d
 ```
 
 ## Run
 
-With the virtual environment active and your working directory at the
-repository root:
+From `backend/` with the virtual environment active:
 
 ```bash
-uvicorn app.main:app --host 127.0.0.1 --port 8000
+uvicorn app.main:create_app --factory --port 8000
 ```
 
-The server listens on **http://127.0.0.1:8000**. Leave this running; stop it
-with `Ctrl+C`.
+- Health check: http://127.0.0.1:8000/health → `{"status":"ok","version":"0.2.0","database":"connected"}`
+- Swagger UI: http://127.0.0.1:8000/docs
 
-## Example request
-
-In a second terminal:
+Quick demo:
 
 ```bash
-curl http://127.0.0.1:8000/api/workers
+curl -X POST localhost:8000/api/tasks -H 'Content-Type: application/json' \
+  -d '{"order_ref":"ORD-10442","sku":"SKU-88213","bin_location":"B-07-3","quantity":4,"due_at":"2030-01-01T12:00:00Z"}'
+curl -X PATCH localhost:8000/api/tasks/1/status -H 'Content-Type: application/json' \
+  -d '{"status":"assigned","worker_id":2}'
+curl localhost:8000/api/board
 ```
 
-Response:
+## Endpoints
 
-```json
-[
-  {
-    "id": 1,
-    "name": "Alice Nguyen",
-    "type": "human",
-    "speed": 1.4,
-    "cur_x": 12,
-    "cur_y": 5,
-    "status": "busy",
-    "enabled": true
-  },
-  {
-    "id": 2,
-    "name": "Rover-7",
-    "type": "robot",
-    "speed": 3.2,
-    "cur_x": 0,
-    "cur_y": 0,
-    "status": "idle",
-    "enabled": true
-  },
-  {
-    "id": 3,
-    "name": "Hauler-12",
-    "type": "robot",
-    "speed": 2.5,
-    "cur_x": 34,
-    "cur_y": 18,
-    "status": "busy",
-    "enabled": false
-  }
-]
-```
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/tasks` | Create a pick task |
+| GET | `/api/tasks` | List tasks (`?status=open`) |
+| GET | `/api/tasks/{id}` | Get one task |
+| PATCH | `/api/tasks/{id}/status` | Move a task through its lifecycle |
+| POST | `/api/tasks/{id}/expedite` | Expedite a task |
+| GET | `/api/board` | Live supervisor board |
+| GET | `/health` | Version and database status |
 
-For a formatted view, pipe the response through Python's JSON tool:
+## Tests
 
 ```bash
-curl -s http://127.0.0.1:8000/api/workers | python3 -m json.tool
+pytest                                  # all tests (integration tests use a temp SQLite DB)
+pytest tests/unit --cov=app/modules     # business layer only, with coverage
 ```
 
-You can also open http://127.0.0.1:8000/docs for FastAPI's interactive
-Swagger UI, which lists the endpoint and lets you try it from the browser.
+To run the integration tests against MySQL, create a database whose name contains `test` and
+set `TEST_DATABASE_URL` (see `.env.example`). The tests refuse to run against any other
+database because they drop their tables afterwards.
+
+## Project layout
+
+```text
+backend/
+  app/core/            settings, database, request logging, errors, version
+  app/modules/tasks/   state machine, service, board builder, repository, router
+  tests/unit/          business-layer tests (no database)
+  tests/integration/   API tests through the real app and database
+docs/DESIGN.md         design doc
+GitVersion.yaml        application version
+CHANGELOG.md
+docker-compose.yml     local MySQL 8.4
+```
