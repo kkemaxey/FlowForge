@@ -1,8 +1,9 @@
 # FlowForge — Pick Tasks & Live Board API (`jayden_work`)
 
 FlowForge is a warehouse control tower for CSC 480. This branch is the backend slice behind the
-supervisor's **live board**: pick tasks stored in MySQL, a lifecycle state machine, and a board
-endpoint that groups tasks by status and reports WIP, late tasks and throughput.
+supervisor's **live board**: order intake that generates pick tasks, the task lifecycle, and a
+board endpoint that groups tasks by status and reports WIP, late orders and throughput. Tables
+follow the course data model (`orders`, `order_lines`, `tasks`, `assignments`) in MySQL.
 
 - Version: see [`GitVersion.yaml`](GitVersion.yaml) · changes: [`CHANGELOG.md`](CHANGELOG.md)
 - Design doc (MVP, stack, API contract, features): [`docs/DESIGN.md`](docs/DESIGN.md)
@@ -36,14 +37,14 @@ From `backend/` with the virtual environment active:
 uvicorn app.main:create_app --factory --port 8000
 ```
 
-- Health check: http://127.0.0.1:8000/health → `{"status":"ok","version":"0.2.0","database":"connected"}`
+- Health check: http://127.0.0.1:8000/health → `{"status":"ok","version":"0.3.0","database":"connected"}`
 - Swagger UI: http://127.0.0.1:8000/docs
 
 Quick demo:
 
 ```bash
-curl -X POST localhost:8000/api/tasks -H 'Content-Type: application/json' \
-  -d '{"order_ref":"ORD-10442","sku":"SKU-88213","bin_location":"B-07-3","quantity":4,"due_at":"2030-01-01T12:00:00Z"}'
+curl -X POST localhost:8000/api/orders -H 'Content-Type: application/json' \
+  -d '{"due_at":"2030-01-01T12:00:00Z","lines":[{"sku_id":"SKU-88213","qty":4,"location_id":"A1-01"}]}'
 curl -X PATCH localhost:8000/api/tasks/1/status -H 'Content-Type: application/json' \
   -d '{"status":"assigned","worker_id":2}'
 curl localhost:8000/api/board
@@ -53,11 +54,12 @@ curl localhost:8000/api/board
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/tasks` | Create a pick task |
+| POST | `/api/orders` | Take in an order; generates one task per line |
+| GET | `/api/orders/{id}` | Get an order and its tasks |
+| POST | `/api/orders/{id}/expedite` | Expedite an order |
 | GET | `/api/tasks` | List tasks (`?status=open`) |
 | GET | `/api/tasks/{id}` | Get one task |
 | PATCH | `/api/tasks/{id}/status` | Move a task through its lifecycle |
-| POST | `/api/tasks/{id}/expedite` | Expedite a task |
 | GET | `/api/board` | Live supervisor board |
 | GET | `/health` | Version and database status |
 
@@ -77,7 +79,7 @@ database because they drop their tables afterwards.
 ```text
 backend/
   app/core/            settings, database, request logging, errors, version
-  app/modules/tasks/   state machine, service, board builder, repository, router
+  app/modules/orders/  task and order rules, service, board builder, repository, router
   tests/unit/          business-layer tests (no database)
   tests/integration/   API tests through the real app and database
 docs/DESIGN.md         design doc
