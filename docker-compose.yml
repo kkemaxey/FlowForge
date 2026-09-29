@@ -1,0 +1,16 @@
+# Local MySQL for development. Reads credentials from backend/.env.
+services:
+  mysql:
+    image: mysql:8.4
+    env_file: backend/.env
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      retries: 20
+
+volumes:
+  mysql-data:
