@@ -23,7 +23,7 @@ def list_workers(
     return service.list_workers(status=status, worker_type=worker_type)
 
 
-@router.get("/{worker_id}", response_model=WorkerOut, responses=NOT_FOUND,
+@router.get("/{worker_id}", response_model=WorkerOut, responses={**NOT_FOUND, **INVALID},
             summary="Get one worker")
 def get_worker(worker_id: int, service: WorkforceService = Depends(get_workforce_service)) -> Worker:
     return service.get_worker(worker_id)
@@ -49,7 +49,8 @@ def update_worker(worker_id: int, payload: WorkerUpdate,
 
 
 @router.delete("/{worker_id}", status_code=204, response_class=Response,
-               responses={**NOT_FOUND, 409: {"model": ErrorResponse, "description": "Worker is busy"}},
+               responses={204: {"description": "Worker deleted; no body"}, **NOT_FOUND, **INVALID,
+                          409: {"model": ErrorResponse, "description": "Worker is busy"}},
                summary="Delete a worker",
                description="Busy workers cannot be deleted; wait until they are idle.")
 def delete_worker(worker_id: int, service: WorkforceService = Depends(get_workforce_service)) -> Response:
