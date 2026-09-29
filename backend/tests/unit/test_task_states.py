@@ -1,16 +1,19 @@
 import pytest
 
 from app.core.errors import InvalidTransitionError
-from app.modules.tasks.task_states import (ALLOWED_TRANSITIONS, TaskStatus, can_transition,
-                                           ensure_transition)
+from app.modules.orders.task_states import (ALLOWED_TRANSITIONS, TaskStatus, can_transition,
+                                            ensure_transition)
+
+
+def test_statuses_match_the_course_data_model():
+    assert {status.value for status in TaskStatus} == {"open", "assigned", "picked", "exception"}
 
 
 @pytest.mark.parametrize("current, target", [
     (TaskStatus.OPEN, TaskStatus.ASSIGNED),
-    (TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS),
-    (TaskStatus.IN_PROGRESS, TaskStatus.PICKED),
+    (TaskStatus.ASSIGNED, TaskStatus.PICKED),
     (TaskStatus.ASSIGNED, TaskStatus.OPEN),
-    (TaskStatus.IN_PROGRESS, TaskStatus.EXCEPTION),
+    (TaskStatus.ASSIGNED, TaskStatus.EXCEPTION),
     (TaskStatus.EXCEPTION, TaskStatus.OPEN),
 ])
 def test_allowed_transitions(current, target):
@@ -20,7 +23,7 @@ def test_allowed_transitions(current, target):
 
 @pytest.mark.parametrize("current, target", [
     (TaskStatus.OPEN, TaskStatus.PICKED),
-    (TaskStatus.OPEN, TaskStatus.IN_PROGRESS),
+    (TaskStatus.OPEN, TaskStatus.EXCEPTION),
     (TaskStatus.EXCEPTION, TaskStatus.PICKED),
     (TaskStatus.PICKED, TaskStatus.OPEN),
 ])

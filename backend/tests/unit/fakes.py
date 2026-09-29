@@ -1,34 +1,46 @@
 """In-memory stand-ins so business logic can be tested without a database."""
 from datetime import datetime
 
-from app.modules.tasks.models import PickTaskRecord
-from app.modules.tasks.task_states import TaskStatus
+from app.modules.orders.models import OrderRecord, TaskRecord
+from app.modules.orders.task_states import TaskStatus
 
 
-class FakeTaskRepository:
+class FakeOrderRepository:
     def __init__(self):
-        self.tasks: dict[int, PickTaskRecord] = {}
-        self._next_id = 1
+        self.orders: dict[int, OrderRecord] = {}
+        self.tasks: dict[int, TaskRecord] = {}
+        self._next_line_id = 1
+        self.save_count = 0
 
-    def add(self, task: PickTaskRecord) -> PickTaskRecord:
-        task.id = self._next_id
-        self._next_id += 1
-        self.tasks[task.id] = task
-        return task
+    def add_order(self, order: OrderRecord) -> OrderRecord:
+        order.id = len(self.orders) + 1
+        self.orders[order.id] = order
+        for line in order.lines:
+            line.id = self._next_line_id
+            line.task.id = self._next_line_id
+            self._next_line_id += 1
+            self.tasks[line.task.id] = line.task
+        return order
 
-    def get(self, task_id: int) -> PickTaskRecord | None:
+    def get_order(self, order_id: int) -> OrderRecord | None:
+        return self.orders.get(order_id)
+
+    def list_orders(self) -> list[OrderRecord]:
+        return list(self.orders.values())
+
+    def get_task(self, task_id: int) -> TaskRecord | None:
         return self.tasks.get(task_id)
 
-    def save(self, task: PickTaskRecord) -> PickTaskRecord:
-        return task
+    def list_tasks(self, status: TaskStatus | None = None) -> list[TaskRecord]:
+        return [task for task in self.tasks.values() if status is None or task.status == status]
 
-    def list(self, status: TaskStatus | None = None) -> list[PickTaskRecord]:
-        matching = [t for t in self.tasks.values() if status is None or t.status == status]
-        return sorted(matching, key=lambda t: (t.due_at, t.id))
+    def list_board_tasks(self, picked_since: datetime) -> list[TaskRecord]:
+        return [task for task in self.tasks.values()
+                if task.status != TaskStatus.PICKED
+                or task.current_assignment.completed_at >= picked_since]
 
-    def list_for_board(self, picked_since: datetime) -> list[PickTaskRecord]:
-        return [t for t in self.tasks.values()
-                if t.status != TaskStatus.PICKED or t.completed_at >= picked_since]
+    def save(self) -> None:
+        self.save_count += 1
 
 
 class FixedClock:
