@@ -19,5 +19,7 @@ uvloop==0.22.1; sys_platform != "win32"
 watchfiles==1.1.1
 websockets==15.0.1
 SQLAlchemy==2.0.54
-PyMySQL==1.2.3
+# Pinned below 1.2.1: 1.2.1-1.2.3 crash on the first caching_sha2_password login over plain TCP
+# (e.g. through the Cloud SQL Auth Proxy) with "'NoneType' object has no attribute 'is_auth_switch_request'".
+PyMySQL==1.2.0
 cryptography==50.0.1
