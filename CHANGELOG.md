@@ -21,6 +21,7 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - `GET /health` reporting version and database connectivity.
 - Request logging (arrival and completion, with `X-Request-ID`) and a consistent JSON error envelope.
 - Workforce CRUD API: `GET/POST /api/workers`, `GET/PATCH/DELETE /api/workers/{id}`.
+- Events → metrics API: `POST /api/events` and `GET /api/metrics?window_minutes=`.
 
 ### Removed
 - Hard-coded mock worker list from the original `app/main.py`.
