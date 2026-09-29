@@ -13,3 +13,4 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - Environment-based configuration (`DATABASE_URL`, `LOG_LEVEL`, `GRID_WIDTH`, `GRID_HEIGHT`).
 - `GitVersion.yaml` as the single source of the application version.
 - pytest setup with separate unit and integration suites.
+- Task lifecycle state machine (open → assigned → picked, with exception and reassignment paths).
