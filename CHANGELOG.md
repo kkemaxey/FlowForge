@@ -7,6 +7,36 @@ All notable changes to this branch are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
+Matches the course data model so this branch lines up with the rest of the team.
+
+### Added
+- `orders`, `order_lines` and `assignments` tables alongside `tasks`, named as in the course spec.
+- `POST /api/orders`: order intake that saves the order and its lines and generates one `open`
+  pick task per line.
+- `GET /api/orders/{id}` and `POST /api/orders/{id}/expedite`.
+- Order status (`new`, `in_progress`, `complete`, `late`) that follows its tasks; an unfinished
+  order past its due time reads as `late`.
+- Live board now counts orders by status and reports late orders.
+
+### Changed
+- Task statuses are now the course's four: `open`, `assigned`, `picked`, `exception`.
+  An exception can only come from `assigned`.
+- Tasks use `sku_id`, `location_id` and `qty`; location ids follow the map seed (`A1-01`).
+- Assigning a task records a row in `assignments`; picking it sets `completed_at`; returning it
+  to `open` drops the unfinished assignment.
+- Due time and priority moved from tasks to orders, so expediting applies to the whole order.
+- Code moved from `modules/tasks` to `modules/orders`.
+
+### Removed
+- `pick_tasks` table, `POST /api/tasks`, `POST /api/tasks/{id}/expedite`, the `in_progress`
+  task status and the exception `reason` field.
+
+### Fixed
+- Location ids from the course map seed (for example `A1-01`) were rejected by the old
+  `B-07-3` format check.
+
 ## [0.2.0] - 2026-09-29
 
 Pick tasks and the live supervisor board, backed by MySQL.
