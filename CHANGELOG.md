@@ -28,6 +28,7 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 
 ### Changed
 - Verified connectivity to Google Cloud SQL (MySQL 8.4) through the Cloud SQL Auth Proxy.
+- Moved the backend into the team's backend/ layout (core/, modules/workforce/, modules/metrics/); Python 3.11+ required.
 
 ### Removed
 - Hard-coded mock worker list from the original `app/main.py`.
