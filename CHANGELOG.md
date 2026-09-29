@@ -22,6 +22,8 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - Request logging (arrival and completion, with `X-Request-ID`) and a consistent JSON error envelope.
 - Workforce CRUD API: `GET/POST /api/workers`, `GET/PATCH/DELETE /api/workers/{id}`.
 - Events → metrics API: `POST /api/events` and `GET /api/metrics?window_minutes=`.
+- Docker image and Compose stack (API + MySQL 8.0 with healthcheck); `.env.example` template.
+- Demo scripts: `scripts/seed_workers.py` and `scripts/demo_events.py`.
 
 ### Removed
 - Hard-coded mock worker list from the original `app/main.py`.
