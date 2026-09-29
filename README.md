@@ -191,7 +191,9 @@ pytest --cov=app --cov-report=term-missing
 ```
 
 To run the integration tests against MySQL instead of in-memory SQLite, set
-`TEST_DATABASE_URL` to a MySQL URL first.
+`TEST_DATABASE_URL` to a MySQL URL first. The tests drop every table when they
+finish, so they refuse to run unless the database name contains `test`
+(for example `flowforge_test`) — never point them at the demo database.
 
 ## Versioning
 

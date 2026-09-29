@@ -32,3 +32,7 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 
 ### Removed
 - Hard-coded mock worker list from the original `app/main.py`.
+
+### Fixed
+- Pinned PyMySQL to 1.2.0: 1.2.1–1.2.3 crash on the first login after a MySQL restart when connecting over plain TCP (as through the Cloud SQL Auth Proxy).
+- Integration tests refuse to run against a database whose name does not contain `test`, since they drop all tables afterwards.
