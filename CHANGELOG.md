@@ -24,6 +24,7 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - Events → metrics API: `POST /api/events` and `GET /api/metrics?window_minutes=`.
 - Docker image and Compose stack (API + MySQL 8.0 with healthcheck); `.env.example` template.
 - Demo scripts: `scripts/seed_workers.py` and `scripts/demo_events.py`.
+- API reference in `docs/API.md` and updated README.
 
 ### Removed
 - Hard-coded mock worker list from the original `app/main.py`.
