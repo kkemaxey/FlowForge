@@ -9,7 +9,7 @@ from app.core.database import Database
 from app.core.errors import register_error_handlers
 from app.core.request_logging import configure_logging, register_request_logging
 from app.core.version import app_version
-from app.modules.orders.router import router as orders_router
+from app.modules.workforce.router import router as workforce_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -19,8 +19,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="FlowForge API",
         version=app_version(),
-        description="Order intake, pick tasks and the live supervisor board "
-                    "for the FlowForge control tower.",
+        description="Workforce API for the FlowForge control tower: add workers and "
+                    "list who is on the floor.",
     )
     database = Database(settings.database_url)
     database.create_tables()
@@ -28,7 +28,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     register_request_logging(app)
     register_error_handlers(app)
-    app.include_router(orders_router)
+    app.include_router(workforce_router)
 
     @app.get("/health", tags=["health"], summary="Service and database health")
     def health(response: Response):

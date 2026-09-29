@@ -19,14 +19,9 @@ class DomainError(Exception):
         self.message = message
 
 
-class NotFoundError(DomainError):
-    status_code = status.HTTP_404_NOT_FOUND
-    code = "not_found"
-
-
-class InvalidTransitionError(DomainError):
+class ConflictError(DomainError):
     status_code = status.HTTP_409_CONFLICT
-    code = "invalid_transition"
+    code = "conflict"
 
 
 class ValidationFailedError(DomainError):
