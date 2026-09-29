@@ -1,7 +1,9 @@
 """In-memory repositories so service tests never touch a database."""
 import dataclasses
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
 
+from app.services.metrics import EventRecord
 from app.services.workforce import Worker
 
 
@@ -48,3 +50,21 @@ class FakeWorkerRepository:
 
     def delete(self, worker_id: int) -> None:
         del self._workers[worker_id]
+
+
+class FakeEventRepository:
+    def __init__(self):
+        self.events: List[EventRecord] = []
+
+    def add(self, event_type: str, ts: datetime, task_id: Optional[int], worker_id: Optional[int],
+            qty: Optional[int], payload: Optional[Dict[str, Any]]) -> EventRecord:
+        event = EventRecord(id=len(self.events) + 1, ts=ts, type=event_type, task_id=task_id,
+                            worker_id=worker_id, qty=qty, payload=payload)
+        self.events.append(event)
+        return event
+
+    def list_since(self, cutoff: datetime) -> List[EventRecord]:
+        return [event for event in self.events if event.ts >= cutoff]
+
+    def list_task_events(self) -> List[EventRecord]:
+        return [event for event in self.events if event.task_id is not None]

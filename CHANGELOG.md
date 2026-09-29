@@ -16,3 +16,4 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - Task lifecycle state machine (open → assigned → picked, with exception and reassignment paths).
 - Greedy nearest-task assigner (Manhattan distance), translated from the course baseline.
 - Workforce service: grid-bounds validation, server-owned status, and no deleting busy workers.
+- Metrics service: throughput per hour, units picked, exceptions, WIP, and worker status counts from the event stream.
