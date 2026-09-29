@@ -17,7 +17,9 @@ services:
       retries: 20
 
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: .env
     environment:
       DATABASE_URL: mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE}
