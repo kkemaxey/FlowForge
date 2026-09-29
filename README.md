@@ -4,6 +4,7 @@ FlowForge is a warehouse control tower for CSC 480. This branch is the backend s
 supervisor's **live board**: order intake that generates pick tasks, the task lifecycle, and a
 board endpoint that groups tasks by status and reports WIP, late orders and throughput. Tables
 follow the course data model (`orders`, `order_lines`, `tasks`, `assignments`) in MySQL.
+The team's Next.js scaffold lives in [`frontend/`](frontend/) and isn't needed to run the backend.
 
 - Version: see [`GitVersion.yaml`](GitVersion.yaml) · changes: [`CHANGELOG.md`](CHANGELOG.md)
 - Design doc (MVP, stack, API contract, features): [`docs/DESIGN.md`](docs/DESIGN.md)
