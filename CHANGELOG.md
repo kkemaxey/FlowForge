@@ -26,5 +26,8 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - Demo scripts: `scripts/seed_workers.py` and `scripts/demo_events.py`.
 - API reference in `docs/API.md` and updated README.
 
+### Changed
+- Verified connectivity to Google Cloud SQL (MySQL 8.4) through the Cloud SQL Auth Proxy.
+
 ### Removed
 - Hard-coded mock worker list from the original `app/main.py`.
