@@ -20,6 +20,7 @@ and versions follow [Semantic Versioning](https://semver.org/) and match
 - MySQL persistence via SQLAlchemy 2.0: `workers` and `events` tables and repositories.
 - `GET /health` reporting version and database connectivity.
 - Request logging (arrival and completion, with `X-Request-ID`) and a consistent JSON error envelope.
+- Workforce CRUD API: `GET/POST /api/workers`, `GET/PATCH/DELETE /api/workers/{id}`.
 
 ### Removed
 - Hard-coded mock worker list from the original `app/main.py`.

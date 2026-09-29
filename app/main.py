@@ -11,7 +11,7 @@ from app.config import Settings, load_settings
 from app.db import build_engine
 from app.models import Base
 from app.request_logging import configure_logging, register_request_logging
-from app.routers import health
+from app.routers import health, workers
 from app.version import read_version
 
 logger = logging.getLogger("flowforge")
@@ -44,4 +44,5 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     register_request_logging(app)
     register_error_handlers(app)
     app.include_router(health.router)
+    app.include_router(workers.router)
     return app
