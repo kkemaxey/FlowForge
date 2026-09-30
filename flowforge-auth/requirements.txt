@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+pydantic
+firebase-admin
+python-dotenv
+httpx
+pytest
+pytest-cov
+# For MySQL / Cloud SQL in production, also install: PyMySQL

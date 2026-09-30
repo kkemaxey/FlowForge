@@ -1,0 +1,7 @@
+# GitVersion configuration (https://gitversion.net)
+# The application version below must match VERSION and the latest CHANGELOG entry.
+mode: ContinuousDelivery
+next-version: 0.1.0
+branches: {}
+ignore:
+  sha: []
