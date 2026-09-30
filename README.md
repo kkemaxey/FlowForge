@@ -1,94 +1,56 @@
 # FlowForge
 
-Warehouse Execution Control Tower. This repository currently holds the
-FastAPI backend for the "running server with one endpoint" assignment; the
-Next.js frontend lives alongside it in [`frontend/`](frontend/) and is
-not required to run the backend below.
+Warehouse execution control tower: orders become pick tasks, a greedy assigner
+hands them to workers and robots, a simulator executes them, and a supervisor
+watches and steers it all from a live console.
 
-## Backend: FastAPI server
+| Part | Stack | Hosting |
+|---|---|---|
+| `frontend/` | Next.js (App Router), TypeScript, Tailwind | Vercel |
+| `backend/` | FastAPI, SQLAlchemy, Alembic | Cloud Run |
+| Database | MySQL (SQLite locally by default) | Cloud SQL |
+| Auth | Firebase (supervisor role) | |
 
-### Prerequisites
+## Backend
 
-- Python 3.11 or newer (verify with `python --version`)
-- `pip` and Python's built-in `venv` module (both ship with Python)
-
-No other tools need to be installed ahead of time.
-
-### Install
-
-From the repository root:
+Requires Python 3.11+.
 
 ```bash
 cd backend
 python -m venv .venv
-```
-
-Activate the virtual environment:
-
-```bash
-# macOS / Linux
-source .venv/bin/activate
-
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-
-# Windows (Git Bash)
-source .venv/Scripts/activate
-```
-
-Then install dependencies:
-
-```bash
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env               # defaults work locally
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
 ```
 
-### Run
+- Health check: http://127.0.0.1:8000/health
+- API docs: http://127.0.0.1:8000/docs
+- Tests: `pytest` (from `backend/`)
 
-With the virtual environment active and your working directory at
-`backend/`:
+## Frontend
+
+Requires Node 20+.
 
 ```bash
-uvicorn app.server:app --port 8000
+cd frontend
+npm install
+cp .env.example .env.local         # add the Firebase web config
+npm run dev
 ```
 
-The server listens on **http://127.0.0.1:8000**.
+Open http://localhost:3000. The home page shows whether it can reach the backend.
 
-### Example request
+## Layout
 
-```bash
-curl http://127.0.0.1:8000/api/workers
-```
+Code is organized by feature so each person works in their own folder
+(owners are in [`.github/CODEOWNERS`](.github/CODEOWNERS)).
 
-Response:
+- `backend/app/core/`: config, database session, Firebase token check (shared)
+- `backend/app/modules/<feature>/`: `router.py`, `models.py`, `schemas.py`, `service.py`
+- `frontend/app/console/<feature>/`: console panels
+- `frontend/lib/`: API client and Firebase setup
 
-```json
-[
-  {
-    "id": 1,
-    "name": "Worker 1",
-    "type": "human",
-    "speed": 2,
-    "cur_x": 3,
-    "cur_y": 2,
-    "status": "idle",
-    "enabled": true
-  },
-  {
-    "id": 2,
-    "name": "Robot 1",
-    "type": "robot",
-    "speed": 4,
-    "cur_x": 15,
-    "cur_y": 9,
-    "status": "idle",
-    "enabled": true
-  }
-]
-```
-
-This is the workforce roster the operations console will eventually render
-live (see the FlowForge design doc's "Workforce management" requirement) —
-hard-coded for now, backed by MySQL later in the semester.
-
-You can also open http://127.0.0.1:8000/docs for FastAPI's interactive
-Swagger UI, or hit `GET /` for a basic liveness check.
+To add a backend feature, work inside its module. Its router is already
+registered in `backend/app/main.py`.
