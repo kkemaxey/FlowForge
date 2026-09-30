@@ -1,65 +1,51 @@
 # FlowForge
 
-Warehouse Execution Control Tower. This repository currently holds the
-FastAPI backend for the "running server with one endpoint" assignment; the
-Next.js frontend lives alongside it in [`frontend/`](frontend/) and is
-not required to run the backend below.
+Warehouse Execution Control Tower. This repository contains the FastAPI
+backend for the warehouse operations API. The Next.js frontend lives in
+[`frontend/`](frontend/) and is not required to run the backend.
 
-## Backend: FastAPI server
+## Backend
 
-### Prerequisites
-
-- Python 3.11 or newer (verify with `python --version`)
-- `pip` and Python's built-in `venv` module (both ship with Python)
-
-No other tools need to be installed ahead of time.
-
-### Install
-
-From the repository root:
+Requires Python 3.11 or newer. From the repository root, create and activate
+a virtual environment, then install the backend dependencies:
 
 ```bash
 cd backend
-python -m venv .venv
+python3 -m venv .venv
 ```
 
 Activate the virtual environment:
 
 ```bash
-# macOS / Linux
 source .venv/bin/activate
-
-# Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-
-# Windows (Git Bash)
-source .venv/Scripts/activate
+python3 -m pip install -r requirements.txt
+python3 -m uvicorn app.server:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Then install dependencies:
+The database URL can be set with `DATABASE_URL`. Without it, the backend uses
+`sqlite:///./app.db` for local development.
 
-```bash
-pip install -r requirements.txt
-```
+## Workers API
 
-### Run
-
-With the virtual environment active and your working directory at
-`backend/`:
-
-```bash
-uvicorn app.server:app --port 8000
-```
-
-The server listens on **http://127.0.0.1:8000**.
-
-### Example request
+List workers with `GET /api/workers` or create one with `POST /api/workers`:
 
 ```bash
 curl http://127.0.0.1:8000/api/workers
+
+curl -X POST http://127.0.0.1:8000/api/workers \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Packing Bot","type":"robot","speed":5,"cur_x":1,"cur_y":4}'
 ```
 
-Response:
+FastAPI's interactive documentation is available at http://127.0.0.1:8000/docs.
+
+Run the backend tests from the repository root:
+
+```bash
+PYTHONPATH=backend .venv/bin/pytest -q backend/tests
+```
+
+Example response:
 
 ```json
 [
@@ -86,9 +72,5 @@ Response:
 ]
 ```
 
-This is the workforce roster the operations console will eventually render
-live (see the FlowForge design doc's "Workforce management" requirement) —
-hard-coded for now, backed by MySQL later in the semester.
-
-You can also open http://127.0.0.1:8000/docs for FastAPI's interactive
-Swagger UI, or hit `GET /` for a basic liveness check.
+The default worker roster is seeded when the database is empty. `GET /` is a
+basic liveness check. Release changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
