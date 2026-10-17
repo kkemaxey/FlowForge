@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 
 import { getMetrics, getOrders, getTasks, type LiveMetrics, type Order, type Task } from "./data";

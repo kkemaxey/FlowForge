@@ -5,6 +5,52 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Live board for Sprint 1 and Sprint 2 (Jayden), built on mock data until the
+orders, tasks and events endpoints exist, then reviewed against the course
+Engineering Standards (2026-10-17).
+
+### Added
+
+- Live board panel (`frontend/app/console/live-board/LiveBoard.tsx`): orders
+  table with status badges and highlighted late orders, task counts per
+  status, Throughput (units and tasks per hour) and WIP tiles, and a red
+  exception banner showing the task, location and exception type.
+- `useLiveBoard.ts` hook that polls `GET /orders`, `GET /tasks` and
+  `GET /events/metrics` every 2 seconds, with loading and error states, and
+  stops polling when the board unmounts.
+- `data.ts` with `Order`, `OrderLine`, `Task` and `LiveMetrics` types and
+  `getOrders()`, `getTasks()` and `getMetrics()`, which return mock data or
+  call the backend through `apiFetch`.
+- `mockData.ts`, an in-browser warehouse simulator (orders arriving, tasks
+  moving open → assigned → picked → complete, occasional stockouts that are
+  reassigned, late orders) so the board updates without a backend.
+- `boardLogic.ts` holding the board's calculations (exception list, WIP total,
+  order sorting) as plain functions, separate from the UI.
+- `live-board/README.md` listing the exact JSON shapes the board expects from
+  `GET /orders`, `GET /tasks` and `GET /events/metrics`.
+- `NEXT_PUBLIC_USE_MOCKS` in `frontend/.env.example` (defaults to `true`).
+- Explanatory comments throughout the live board code.
+
+### Changed
+
+- Reviewed the live board against the Engineering Standards: moved logic out
+  of the UI components into `boardLogic.ts`, and removed an unused
+  `"use client"` directive from the polling hook.
+
+### Removed
+
+- Unused `WorkerStatus` re-export from `live-board/data.ts` (dead code).
+
+### Known issues
+
+- The live board types live in `live-board/data.ts` until they are reviewed
+  for the shared `types/index.ts`; the shared `TaskStatus` has no `exception`
+  value yet.
+- `frontend/package-lock.json` is out of sync with `package.json`, so
+  `npm ci` fails.
+
 ## [0.2.0] - 2026-09-30
 
 Sprint 0 foundation filled in: a runnable backend and frontend skeleton, CI

@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api-client";
-import type { TaskStatus, WorkerStatus } from "@/types";
+import type { TaskStatus } from "@/types";
 
 import { mockMetrics, mockOrders, mockTasks } from "./mockData";
 
@@ -19,8 +19,6 @@ export type OrderStatus = "new" | "in_progress" | "complete" | "late";
 export type LiveTaskStatus = TaskStatus | "exception";
 
 export type ExceptionType = "stockout" | "worker_down";
-
-export type { WorkerStatus };
 
 // One line item on an order (a SKU and quantity). The backend turns each line into one pick task.
 export interface OrderLine {

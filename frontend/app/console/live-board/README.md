@@ -6,6 +6,7 @@ Owner: Jayden. Shows order and task status, throughput, WIP and active exception
 |---|---|
 | `LiveBoard.tsx` | The board UI |
 | `useLiveBoard.ts` | Polls all three endpoints, tracks loading/error |
+| `boardLogic.ts` | Calculations behind the UI: exception list, WIP total, order sorting |
 | `data.ts` | Types and `getOrders()` / `getTasks()` / `getMetrics()` |
 | `mockData.ts` | In-browser simulator used until the backend endpoints exist |
 

@@ -11,6 +11,7 @@ import {
   type OrderStatus,
   type Task,
 } from "./data";
+import { collectExceptions, sortNewestFirst, wipTotal } from "./boardLogic";
 import { useLiveBoard } from "./useLiveBoard";
 
 // Owner: Jayden
@@ -71,7 +72,7 @@ export function LiveBoard() {
               {/* WIP = orders being worked on + tasks handed to workers but not yet picked */}
               <Tile
                 label="WIP"
-                value={(data.metrics.orders_in_progress + data.metrics.tasks_assigned).toLocaleString()}
+                value={wipTotal(data.metrics).toLocaleString()}
                 detail={`${data.metrics.orders_in_progress} orders in progress · ${data.metrics.tasks_assigned} tasks assigned`}
               />
             </div>
@@ -101,28 +102,8 @@ function StatusLine({ updatedAt, error }: { updatedAt?: Date; error: Error | nul
 // Red alert listing every task in exception. The grid map (Aalan) handles showing it on the map;
 // this only flags it on the live board.
 function ExceptionBanner({ tasks, metrics }: { tasks: Task[]; metrics: LiveMetrics }) {
-  // Merge exception tasks with the metrics' active exception, one entry per task.
-  const alerts = new Map<number, { taskId: number; orderId: number; location: string; type: ExceptionType }>();
-  for (const task of tasks) {
-    if (task.status === "exception") {
-      alerts.set(task.id, {
-        taskId: task.id,
-        orderId: task.order_id,
-        location: task.location,
-        type: task.exception_type ?? "stockout",
-      });
-    }
-  }
-  const active = metrics.active_exception;
-  if (active && !alerts.has(active.task_id)) {
-    alerts.set(active.task_id, {
-      taskId: active.task_id,
-      orderId: active.order_id,
-      location: active.location,
-      type: active.type,
-    });
-  }
-  if (alerts.size === 0) return null;
+  const alerts = collectExceptions(tasks, metrics);
+  if (alerts.length === 0) return null;
 
   return (
     <div
@@ -130,10 +111,10 @@ function ExceptionBanner({ tasks, metrics }: { tasks: Task[]; metrics: LiveMetri
       className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/60 dark:text-red-200"
     >
       <p className="font-semibold">
-        {alerts.size === 1 ? "Exception on the floor" : `${alerts.size} exceptions on the floor`}
+        {alerts.length === 1 ? "Exception on the floor" : `${alerts.length} exceptions on the floor`}
       </p>
       <ul className="mt-1 space-y-0.5">
-        {[...alerts.values()].map((a) => (
+        {alerts.map((a) => (
           <li key={a.taskId}>
             {EXCEPTION_LABEL[a.type]} · Task #{a.taskId} (order #{a.orderId}) at <span className="font-mono">{a.location}</span>
           </li>
@@ -176,7 +157,7 @@ function TaskSummary({ counts }: { counts: Record<LiveTaskStatus, number> }) {
 
 // Orders table, newest first. Late orders get a red row and red due time.
 function OrdersTable({ orders }: { orders: Order[] }) {
-  const sorted = [...orders].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const sorted = sortNewestFirst(orders);
 
   return (
     <div>
