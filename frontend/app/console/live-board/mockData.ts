@@ -1,17 +1,28 @@
 import type { ActiveException, LiveMetrics, LiveTaskStatus, Order, Task } from "./data";
 
-// In-browser simulator used while the backend modules are empty (NEXT_PUBLIC_USE_MOCKS=true).
-// State advances one tick per TICK_MS of wall time, whenever any getter is called.
+// Mock data for the live board, used while the backend modules are still empty (NEXT_PUBLIC_USE_MOCKS=true).
+//
+// Instead of static fake data, this is a tiny warehouse simulator that runs in the browser so the board
+// visibly changes while it polls. It loosely copies what the real backend will do:
+//   - new orders arrive, and each order line becomes one pick task
+//   - idle workers get assigned open tasks (a simple greedy assigner)
+//   - tasks move open -> assigned -> picked -> complete
+//   - occasionally a stockout puts a task into "exception"; after a few ticks it clears and the task goes
+//     back to open so it can be reassigned (the Sprint 2 exception flow)
+//   - an order is complete when all its tasks are complete, and late if it passes its due time first
+// The simulation advances one "tick" per TICK_MS of real time, whenever any of the mock getters is called.
 
-const TICK_MS = 1500;
-const MAX_CATCH_UP_TICKS = 20;
-const THROUGHPUT_WINDOW_MS = 5 * 60_000;
-const EXCEPTION_TICKS = 4;
-const MAX_ORDERS = 14;
+// Tuning knobs for the simulation.
+const TICK_MS = 1500; // real time per simulation step
+const MAX_CATCH_UP_TICKS = 20; // cap on steps after the tab was in the background
+const THROUGHPUT_WINDOW_MS = 5 * 60_000; // throughput is measured over the last 5 minutes
+const EXCEPTION_TICKS = 4; // how long a stockout lasts before the task is reassigned
+const MAX_ORDERS = 14; // older completed orders are dropped to keep the table short
 
 const WORKER_IDS = [1, 2, 3, 4, 5, 6];
 const SKUS = ["SKU-1042", "SKU-2210", "SKU-3307", "SKU-4419", "SKU-5523", "SKU-6610", "SKU-7734"];
 
+// Everything the simulator remembers between polls.
 interface SimState {
   orders: Order[];
   tasks: Task[];
@@ -23,6 +34,7 @@ interface SimState {
   nextTaskId: number;
 }
 
+// Created on the first call, then kept for as long as the page is open.
 let sim: SimState | null = null;
 
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -31,6 +43,7 @@ const randInt = (min: number, max: number) => min + Math.floor(Math.random() * (
 const randomLocation = () =>
   `${pick(["A", "B", "C", "D"])}-${String(randInt(1, 12)).padStart(2, "0")}-${randInt(1, 4)}`;
 
+// Creates an order with 1-4 random lines and one open pick task per line.
 function addOrder(s: SimState, now: number, dueInMs: number, createdAt = now) {
   const orderId = s.nextOrderId++;
   const order: Order = {
@@ -61,6 +74,7 @@ function addOrder(s: SimState, now: number, dueInMs: number, createdAt = now) {
   return order;
 }
 
+// Builds the starting state so the board has something to show on first load.
 function seed(now: number): SimState {
   const s: SimState = {
     orders: [],
@@ -99,7 +113,9 @@ function seed(now: number): SimState {
   return s;
 }
 
+// One step of the simulation: advance tasks, maybe raise a stockout, maybe add an order, update order statuses.
 function tick(s: SimState, now: number) {
+  // Workers holding an unfinished task are busy; everyone else can take an open task.
   const busy = new Set(s.tasks.filter((t) => t.worker_id !== null && t.status !== "complete" && t.status !== "open").map((t) => t.worker_id));
 
   // Each task moves at most one step per tick. Iterate a snapshot so newly freed workers wait a tick.
@@ -166,6 +182,8 @@ function tick(s: SimState, now: number) {
   s.completions = s.completions.filter((c) => now - c.at <= THROUGHPUT_WINDOW_MS);
 }
 
+// Order status is derived from its tasks: all complete -> complete, past due -> late,
+// any task started -> in_progress, otherwise new.
 function updateOrderStatuses(s: SimState, now: number) {
   for (const order of s.orders) {
     const tasks = s.tasks.filter((t) => t.order_id === order.id);
@@ -184,6 +202,8 @@ function updateOrderStatuses(s: SimState, now: number) {
   }
 }
 
+// Runs however many ticks have passed since the last call, based on the clock rather than call count.
+// The board calls three getters per poll; only the first one in a poll actually advances anything.
 function advance(): SimState {
   const now = Date.now();
   if (!sim) sim = seed(now);
@@ -195,6 +215,8 @@ function advance(): SimState {
   return sim;
 }
 
+// The mock versions of GET /orders, GET /tasks and GET /events/metrics. They return copies so React
+// sees new objects each poll and re-renders.
 export async function mockOrders(): Promise<Order[]> {
   return structuredClone(advance().orders);
 }
@@ -206,6 +228,7 @@ export async function mockTasks(): Promise<Task[]> {
 export async function mockMetrics(): Promise<LiveMetrics> {
   const s = advance();
   const now = Date.now();
+  // Scale "completed in the last 5 minutes" up to an hourly rate.
   const perHour = 3_600_000 / THROUGHPUT_WINDOW_MS;
   const recent = s.completions.filter((c) => now - c.at <= THROUGHPUT_WINDOW_MS);
 

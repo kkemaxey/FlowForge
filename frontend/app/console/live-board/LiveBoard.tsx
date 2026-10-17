@@ -14,7 +14,17 @@ import {
 import { useLiveBoard } from "./useLiveBoard";
 
 // Owner: Jayden
+//
+// The live board panel on the supervisor console (Sprint 1 + 2). Top to bottom it shows:
+//   1. a status line (last update time, whether we're on mock data, refresh errors)
+//   2. a red exception banner when a task is stuck (e.g. stockout)
+//   3. Throughput and WIP tiles
+//   4. task counts per status
+//   5. the orders table, newest first, with late orders highlighted
+// Data comes from useLiveBoard(), which polls every 2 seconds. This is a Client Component ("use client")
+// because polling needs browser state and timers.
 
+// Badge colors per order status.
 const ORDER_BADGE: Record<OrderStatus, string> = {
   new: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   in_progress: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
@@ -22,6 +32,7 @@ const ORDER_BADGE: Record<OrderStatus, string> = {
   late: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
 };
 
+// The order and colors of the task-count boxes.
 const TASK_STATUSES: { status: LiveTaskStatus; label: string; className: string }[] = [
   { status: "open", label: "Open", className: "text-zinc-700 dark:text-zinc-300" },
   { status: "assigned", label: "Assigned", className: "text-blue-700 dark:text-blue-400" },
@@ -57,6 +68,7 @@ export function LiveBoard() {
                 unit="units/hr"
                 detail={`${data.metrics.tasks_per_hour.toLocaleString()} tasks/hr`}
               />
+              {/* WIP = orders being worked on + tasks handed to workers but not yet picked */}
               <Tile
                 label="WIP"
                 value={(data.metrics.orders_in_progress + data.metrics.tasks_assigned).toLocaleString()}
@@ -72,6 +84,7 @@ export function LiveBoard() {
   );
 }
 
+// Small header line: green/red dot, last update time, mock-data tag, and refresh errors.
 function StatusLine({ updatedAt, error }: { updatedAt?: Date; error: Error | null }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
@@ -85,6 +98,8 @@ function StatusLine({ updatedAt, error }: { updatedAt?: Date; error: Error | nul
   );
 }
 
+// Red alert listing every task in exception. The grid map (Aalan) handles showing it on the map;
+// this only flags it on the live board.
 function ExceptionBanner({ tasks, metrics }: { tasks: Task[]; metrics: LiveMetrics }) {
   // Merge exception tasks with the metrics' active exception, one entry per task.
   const alerts = new Map<number, { taskId: number; orderId: number; location: string; type: ExceptionType }>();
@@ -128,6 +143,7 @@ function ExceptionBanner({ tasks, metrics }: { tasks: Task[]; metrics: LiveMetri
   );
 }
 
+// A single metric box (used for Throughput and WIP).
 function Tile({ label, value, unit, detail }: { label: string; value: string; unit?: string; detail: string }) {
   return (
     <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
@@ -141,6 +157,7 @@ function Tile({ label, value, unit, detail }: { label: string; value: string; un
   );
 }
 
+// How many tasks are in each status right now, from the metrics endpoint.
 function TaskSummary({ counts }: { counts: Record<LiveTaskStatus, number> }) {
   return (
     <div>
@@ -157,6 +174,7 @@ function TaskSummary({ counts }: { counts: Record<LiveTaskStatus, number> }) {
   );
 }
 
+// Orders table, newest first. Late orders get a red row and red due time.
 function OrdersTable({ orders }: { orders: Order[] }) {
   const sorted = [...orders].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 
