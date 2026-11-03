@@ -5,18 +5,17 @@ import type { ReactNode } from "react";
 import { PortalNav } from "@/components/portal/PortalNav";
 import { RoleToggle } from "@/components/portal/RoleToggle";
 import { parseRole, ROLE_COOKIE, ROLE_TOGGLE_ENABLED } from "@/lib/mockRole";
-import { MOCK_WAREHOUSES } from "@/mocks/warehouses";
+import { DEMO_WAREHOUSE } from "@/mocks/demoWarehouse";
 
 // The one nav shell every portal page shares. Admin view = supervisor view + the Setup section.
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const role = parseRole((await cookies()).get(ROLE_COOKIE)?.value);
-  const warehouses = MOCK_WAREHOUSES.map(({ id, name }) => ({ id, name }));
 
   return (
     <div className="flex flex-1 flex-col">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
         <div className="flex items-center gap-3">
-          <Link href="/warehouses" className="flex items-center gap-2 font-semibold text-zinc-900 dark:text-zinc-100">
+          <Link href="/console" className="flex items-center gap-2 font-semibold text-zinc-900 dark:text-zinc-100">
             <span aria-hidden className="h-4 w-4 rounded-sm bg-blue-600" />
             FlowForge
           </Link>
@@ -32,7 +31,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       </header>
       <div className="flex flex-1 flex-col lg:flex-row">
         <aside className="border-b border-zinc-200 p-4 lg:w-56 lg:shrink-0 lg:border-r lg:border-b-0 dark:border-zinc-800">
-          <PortalNav role={role} warehouses={warehouses} />
+          <PortalNav role={role} warehouseName={DEMO_WAREHOUSE.name} />
         </aside>
         <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
       </div>

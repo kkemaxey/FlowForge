@@ -1,9 +1,7 @@
 import { PlaceholderPage } from "@/components/portal/Wireframe";
-import { warehouseOr404 } from "@/mocks/warehouses";
+import { DEMO_WAREHOUSE as warehouse } from "@/mocks/demoWarehouse";
 
-export default async function WorkforcePage({ params }: PageProps<"/admin/w/[id]/workforce">) {
-  const warehouse = warehouseOr404((await params).id);
-
+export default function WorkforcePage() {
   return (
     <PlaceholderPage
       title="Workforce"

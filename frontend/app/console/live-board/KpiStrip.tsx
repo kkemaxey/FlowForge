@@ -1,26 +1,28 @@
-import type { LiveMetrics, Order } from "./data";
-import { onTimeRate, wipTotal } from "./boardLogic";
+import type { LiveMetrics, Order, Task } from "./data";
+import { onTimeRate, workInProgress } from "./boardLogic";
 
 // The three headline numbers across the top of the console: throughput, WIP and on-time %.
-// Pure display: the numbers come from the metrics endpoint and boardLogic.ts.
+// Pure display: throughput comes from the metrics endpoint (a dash while it's missing); WIP and on-time are
+// worked out from orders and tasks in boardLogic.ts.
 
-export function KpiStrip({ metrics, orders }: { metrics: LiveMetrics; orders: Order[] }) {
+export function KpiStrip({ metrics, orders, tasks }: { metrics: LiveMetrics | null; orders: Order[]; tasks: Task[] }) {
   const onTime = onTimeRate(orders);
+  const wip = workInProgress(orders, tasks);
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <Tile
         label="Throughput"
-        value={metrics.units_per_hour.toLocaleString()}
-        unit="units/hr"
+        value={metrics ? metrics.units_per_hour.toLocaleString() : "—"}
+        unit={metrics ? "units/hr" : undefined}
         accent="border-l-blue-600"
-        detail={`${metrics.tasks_per_hour.toLocaleString()} tasks/hr · last 5 min`}
+        detail={metrics ? `${metrics.tasks_per_hour.toLocaleString()} tasks/hr · last 5 min` : "Waiting on the metrics endpoint"}
       />
       <Tile
         label="WIP"
-        value={wipTotal(metrics).toLocaleString()}
+        value={wip.total.toLocaleString()}
         accent="border-l-orange-500"
-        detail={`${metrics.orders_in_progress} orders in progress · ${metrics.tasks_assigned} tasks assigned`}
+        detail={`${wip.ordersInProgress} orders in progress · ${wip.tasksAssigned} tasks assigned`}
       />
       <Tile
         label="On-time"
