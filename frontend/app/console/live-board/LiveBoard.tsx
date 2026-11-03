@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Card } from "@/components/ui/Card";
 
 import {
@@ -11,7 +13,8 @@ import {
   type OrderStatus,
   type Task,
 } from "./data";
-import { collectExceptions, sortNewestFirst, wipTotal } from "./boardLogic";
+import { collectExceptions, sortNewestFirst } from "./boardLogic";
+import { KpiStrip } from "./KpiStrip";
 import { useLiveBoard } from "./useLiveBoard";
 
 // Owner: Jayden
@@ -19,7 +22,7 @@ import { useLiveBoard } from "./useLiveBoard";
 // The live board panel on the supervisor console (Sprint 1 + 2). Top to bottom it shows:
 //   1. a status line (last update time, whether we're on mock data, refresh errors)
 //   2. a red exception banner when a task is stuck (e.g. stockout)
-//   3. Throughput and WIP tiles
+//   3. the KPI strip: throughput, WIP and on-time %
 //   4. task counts per status
 //   5. the orders table, newest first, with late orders highlighted
 // Data comes from useLiveBoard(), which polls every 2 seconds. This is a Client Component ("use client")
@@ -50,8 +53,9 @@ const EXCEPTION_LABEL: Record<ExceptionType, string> = {
 const formatTime = (value: string | Date) =>
   new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
 
-export function LiveBoard() {
-  const { data, error, loading } = useLiveBoard();
+// warehouseId scopes the board to one site; leave it out to show everything.
+export function LiveBoard({ warehouseId }: { warehouseId?: number }) {
+  const { data, error, loading } = useLiveBoard(2000, warehouseId);
 
   return (
     <Card title="Live board">
@@ -62,22 +66,9 @@ export function LiveBoard() {
         {data && (
           <>
             <ExceptionBanner tasks={data.tasks} metrics={data.metrics} />
-            <div className="grid grid-cols-2 gap-3">
-              <Tile
-                label="Throughput"
-                value={data.metrics.units_per_hour.toLocaleString()}
-                unit="units/hr"
-                detail={`${data.metrics.tasks_per_hour.toLocaleString()} tasks/hr`}
-              />
-              {/* WIP = orders being worked on + tasks handed to workers but not yet picked */}
-              <Tile
-                label="WIP"
-                value={wipTotal(data.metrics).toLocaleString()}
-                detail={`${data.metrics.orders_in_progress} orders in progress · ${data.metrics.tasks_assigned} tasks assigned`}
-              />
-            </div>
+            <KpiStrip metrics={data.metrics} orders={data.orders} />
             <TaskSummary counts={data.metrics.task_counts} />
-            <OrdersTable orders={data.orders} />
+            <OrdersTable orders={data.orders} warehouseId={warehouseId} />
           </>
         )}
       </div>
@@ -124,20 +115,6 @@ function ExceptionBanner({ tasks, metrics }: { tasks: Task[]; metrics: LiveMetri
   );
 }
 
-// A single metric box (used for Throughput and WIP).
-function Tile({ label, value, unit, detail }: { label: string; value: string; unit?: string; detail: string }) {
-  return (
-    <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-      <p className="text-xs font-medium text-zinc-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
-        {value}
-        {unit && <span className="ml-1 text-sm font-normal text-zinc-500">{unit}</span>}
-      </p>
-      <p className="mt-0.5 text-xs text-zinc-500">{detail}</p>
-    </div>
-  );
-}
-
 // How many tasks are in each status right now, from the metrics endpoint.
 function TaskSummary({ counts }: { counts: Record<LiveTaskStatus, number> }) {
   return (
@@ -155,8 +132,9 @@ function TaskSummary({ counts }: { counts: Record<LiveTaskStatus, number> }) {
   );
 }
 
-// Orders table, newest first. Late orders get a red row and red due time.
-function OrdersTable({ orders }: { orders: Order[] }) {
+// Orders table, newest first. Late orders get a red row and red due time. Inside a warehouse, each order
+// number links to its detail page.
+function OrdersTable({ orders, warehouseId }: { orders: Order[]; warehouseId?: number }) {
   const sorted = sortNewestFirst(orders);
 
   return (
@@ -181,7 +159,15 @@ function OrdersTable({ orders }: { orders: Order[] }) {
                 const late = order.status === "late";
                 return (
                   <tr key={order.id} className={late ? "bg-red-50 dark:bg-red-950/40" : undefined}>
-                    <td className="px-3 py-2 font-mono text-zinc-900 dark:text-zinc-100">#{order.id}</td>
+                    <td className="px-3 py-2 font-mono text-zinc-900 dark:text-zinc-100">
+                      {warehouseId === undefined ? (
+                        `#${order.id}`
+                      ) : (
+                        <Link href={`/w/${warehouseId}/orders/${order.id}`} className="underline underline-offset-2">
+                          #{order.id}
+                        </Link>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ORDER_BADGE[order.status]}`}>
                         {order.status.replace("_", " ")}

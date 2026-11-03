@@ -1,13 +1,16 @@
 # Live board
 
-Owner: Jayden. Shows order and task status, throughput, WIP and active exceptions. Polls every 2 seconds.
+Owner: Jayden. Shows order and task status, throughput, WIP, on-time % and active exceptions. Polls every 2 seconds.
+Also renders the throughput chart on the metrics page (`/w/[id]/metrics`).
 
 | File | Job |
 |---|---|
 | `LiveBoard.tsx` | The board UI |
+| `KpiStrip.tsx` | Throughput, WIP and on-time % tiles |
+| `ThroughputChart.tsx` | Units per minute over the last 30 minutes (metrics page) |
 | `useLiveBoard.ts` | Polls all three endpoints, tracks loading/error |
-| `boardLogic.ts` | Calculations behind the UI: exception list, WIP total, order sorting |
-| `data.ts` | Types and `getOrders()` / `getTasks()` / `getMetrics()` |
+| `boardLogic.ts` | Calculations behind the UI: exception list, WIP total, on-time %, order sorting, throughput summary |
+| `data.ts` | Types and `getOrders()` / `getTasks()` / `getMetrics()` / `getThroughput()` |
 | `mockData.ts` | In-browser simulator used until the backend endpoints exist |
 
 ## Mock vs. real API
@@ -20,6 +23,12 @@ time, so restart `npm run dev` after changing it.
 
 All three are `GET`, need the Firebase token, and return JSON. Timestamps are ISO 8601 strings in UTC
 (`"2026-10-17T18:04:12Z"`). IDs are integers. Field names are snake_case, matching the Pydantic schemas.
+
+**Warehouse scoping:** inside the portal (`/w/[id]/...`) every request adds `?warehouse_id=<id>`. Without it the
+backend should return all warehouses, which is what the original `/console` page does.
+
+On-time % is calculated in the browser from `GET /orders` (completed orders with `completed_at <= due_at`, divided by
+completed orders), so it needs no new endpoint.
 
 ### `GET /orders` (Kanayo)
 
@@ -100,6 +109,18 @@ Returns an array of pick tasks, one per order line.
 - `task_counts`: include every status key, even when the count is 0
 - `active_exception`: the current unresolved exception, or `null`. `type` is `"stockout" | "worker_down"`.
   The board also flags any task in `GET /tasks` with status `exception`, so either source works.
+
+### `GET /events/metrics/throughput?minutes=30` (Kendyn)
+
+Completions per minute, oldest first, one entry per minute even when nothing was completed. `bucket_start` is the
+start of the minute; the last bucket is the current, still-filling minute.
+
+```json
+[
+  { "bucket_start": "2026-10-17T18:00:00Z", "units": 41, "tasks": 14 },
+  { "bucket_start": "2026-10-17T18:01:00Z", "units": 37, "tasks": 12 }
+]
+```
 
 ## TODO
 

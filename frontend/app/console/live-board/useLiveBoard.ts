@@ -11,12 +11,13 @@ export interface LiveBoardData {
 
 /**
  * Polls orders, tasks and metrics together every `intervalMs` (2 seconds by default).
+ * Pass `warehouseId` to scope everything to one warehouse.
  *
  * - `loading` is true only until the first response (or first error) comes back.
  * - If a later poll fails, the last good data stays on screen and `error` explains what went wrong.
  * - The interval is cleared when the board unmounts, and late responses are ignored after that.
  */
-export function useLiveBoard(intervalMs = 2000) {
+export function useLiveBoard(intervalMs = 2000, warehouseId?: number) {
   const [data, setData] = useState<LiveBoardData | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
@@ -30,7 +31,11 @@ export function useLiveBoard(intervalMs = 2000) {
       inFlight = true;
       try {
         // Fetch all three at once so the orders, tasks and metrics on screen come from the same moment.
-        const [orders, tasks, metrics] = await Promise.all([getOrders(), getTasks(), getMetrics()]);
+        const [orders, tasks, metrics] = await Promise.all([
+          getOrders(warehouseId),
+          getTasks(warehouseId),
+          getMetrics(warehouseId),
+        ]);
         if (!cancelled) {
           setData({ orders, tasks, metrics, updatedAt: new Date() });
           setError(null);
@@ -49,7 +54,7 @@ export function useLiveBoard(intervalMs = 2000) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [intervalMs]);
+  }, [intervalMs, warehouseId]);
 
   return { data, error, loading: data === null && error === null };
 }

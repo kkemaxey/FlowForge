@@ -1,4 +1,4 @@
-import type { ActiveException, LiveMetrics, LiveTaskStatus, Order, Task } from "./data";
+import type { ActiveException, LiveMetrics, LiveTaskStatus, Order, Task, ThroughputBucket } from "./data";
 
 // Mock data for the live board, used while the backend modules are still empty (NEXT_PUBLIC_USE_MOCKS=true).
 //
@@ -11,11 +11,13 @@ import type { ActiveException, LiveMetrics, LiveTaskStatus, Order, Task } from "
 //     back to open so it can be reassigned (the Sprint 2 exception flow)
 //   - an order is complete when all its tasks are complete, and late if it passes its due time first
 // The simulation advances one "tick" per TICK_MS of real time, whenever any of the mock getters is called.
+// Each warehouse gets its own independent simulator, so switching sites in the portal shows different data.
 
 // Tuning knobs for the simulation.
 const TICK_MS = 1500; // real time per simulation step
 const MAX_CATCH_UP_TICKS = 20; // cap on steps after the tab was in the background
 const THROUGHPUT_WINDOW_MS = 5 * 60_000; // throughput is measured over the last 5 minutes
+const HISTORY_WINDOW_MS = 30 * 60_000; // completions kept for the metrics page chart
 const EXCEPTION_TICKS = 4; // how long a stockout lasts before the task is reassigned
 const MAX_ORDERS = 14; // older completed orders are dropped to keep the table short
 
@@ -34,8 +36,8 @@ interface SimState {
   nextTaskId: number;
 }
 
-// Created on the first call, then kept for as long as the page is open.
-let sim: SimState | null = null;
+// One simulator per warehouse (key 0 = unscoped), created on first call and kept while the page is open.
+const sims = new Map<number, SimState>();
 
 const iso = (ms: number) => new Date(ms).toISOString();
 const pick = <T>(items: T[]) => items[Math.floor(Math.random() * items.length)];
@@ -103,9 +105,12 @@ function seed(now: number): SimState {
   done.status = "complete";
   done.completed_at = iso(now - 90_000);
 
-  // Backfill completions so throughput isn't zero on first load.
-  for (let i = 1; i <= 60; i++) {
-    s.completions.push({ at: now - i * 5_000, units: randInt(1, 5) });
+  // Backfill 30 minutes of completions so throughput and the metrics chart aren't empty on first load.
+  // The rate drifts between 6 and 16 picks a minute so the chart has some shape.
+  for (let at = now - 5_000; at > now - HISTORY_WINDOW_MS; ) {
+    s.completions.push({ at, units: randInt(1, 5) });
+    const minutesAgo = (now - at) / 60_000;
+    at -= 60_000 / (11 + 5 * Math.sin(minutesAgo / 4));
   }
 
   // Run a few ticks so the board opens mid-flow.
@@ -179,7 +184,7 @@ function tick(s: SimState, now: number) {
     s.orders = s.orders.filter((o) => o !== oldest);
     s.tasks = s.tasks.filter((t) => t.order_id !== oldest.id);
   }
-  s.completions = s.completions.filter((c) => now - c.at <= THROUGHPUT_WINDOW_MS);
+  s.completions = s.completions.filter((c) => now - c.at <= HISTORY_WINDOW_MS);
 }
 
 // Order status is derived from its tasks: all complete -> complete, past due -> late,
@@ -204,9 +209,13 @@ function updateOrderStatuses(s: SimState, now: number) {
 
 // Runs however many ticks have passed since the last call, based on the clock rather than call count.
 // The board calls three getters per poll; only the first one in a poll actually advances anything.
-function advance(): SimState {
+function advance(warehouseId = 0): SimState {
   const now = Date.now();
-  if (!sim) sim = seed(now);
+  let sim = sims.get(warehouseId);
+  if (!sim) {
+    sim = seed(now);
+    sims.set(warehouseId, sim);
+  }
   const steps = Math.floor((now - sim.lastTick) / TICK_MS);
   for (let i = 0; i < Math.min(steps, MAX_CATCH_UP_TICKS); i++) {
     tick(sim, now);
@@ -215,18 +224,34 @@ function advance(): SimState {
   return sim;
 }
 
-// The mock versions of GET /orders, GET /tasks and GET /events/metrics. They return copies so React
+// The mock versions of GET /orders, GET /tasks, GET /events/metrics and GET /events/metrics/throughput. They return copies so React
 // sees new objects each poll and re-renders.
-export async function mockOrders(): Promise<Order[]> {
-  return structuredClone(advance().orders);
+export async function mockOrders(warehouseId?: number): Promise<Order[]> {
+  return structuredClone(advance(warehouseId).orders);
 }
 
-export async function mockTasks(): Promise<Task[]> {
-  return structuredClone(advance().tasks);
+export async function mockTasks(warehouseId?: number): Promise<Task[]> {
+  return structuredClone(advance(warehouseId).tasks);
 }
 
-export async function mockMetrics(): Promise<LiveMetrics> {
-  const s = advance();
+export async function mockThroughput(warehouseId: number | undefined, minutes: number): Promise<ThroughputBucket[]> {
+  const s = advance(warehouseId);
+  const currentMinute = Math.floor(Date.now() / 60_000) * 60_000;
+  const buckets: ThroughputBucket[] = [];
+  for (let i = minutes - 1; i >= 0; i--) {
+    const start = currentMinute - i * 60_000;
+    const inBucket = s.completions.filter((c) => c.at >= start && c.at < start + 60_000);
+    buckets.push({
+      bucket_start: iso(start),
+      units: inBucket.reduce((sum, c) => sum + c.units, 0),
+      tasks: inBucket.length,
+    });
+  }
+  return buckets;
+}
+
+export async function mockMetrics(warehouseId?: number): Promise<LiveMetrics> {
+  const s = advance(warehouseId);
   const now = Date.now();
   // Scale "completed in the last 5 minutes" up to an hourly rate.
   const perHour = 3_600_000 / THROUGHPUT_WINDOW_MS;

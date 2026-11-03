@@ -1,4 +1,4 @@
-import type { ExceptionType, LiveMetrics, Order, Task } from "./data";
+import type { ExceptionType, LiveMetrics, Order, Task, ThroughputBucket } from "./data";
 
 // Owner: Jayden
 //
@@ -50,4 +50,29 @@ export function wipTotal(metrics: LiveMetrics): number {
 /** Orders sorted newest first. Returns a new array so the polled data is never mutated. */
 export function sortNewestFirst(orders: Order[]): Order[] {
   return [...orders].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+}
+
+/**
+ * Share of completed orders that finished by their due time, as a whole percent, or null when nothing has
+ * completed yet (so the UI can show a dash instead of a misleading 0%).
+ */
+export function onTimeRate(orders: Order[]): number | null {
+  const completed = orders.filter((o) => o.status === "complete" && o.completed_at !== null);
+  if (completed.length === 0) return null;
+  const onTime = completed.filter((o) => Date.parse(o.completed_at!) <= Date.parse(o.due_at)).length;
+  return Math.round((onTime / completed.length) * 100);
+}
+
+export interface ThroughputSummary {
+  totalUnits: number;
+  unitsPerHour: number;
+  peak: ThroughputBucket | null;
+}
+
+/** Totals for the metrics chart: units in the window, the hourly rate they imply, and the busiest minute. */
+export function summarizeThroughput(buckets: ThroughputBucket[]): ThroughputSummary {
+  const totalUnits = buckets.reduce((sum, b) => sum + b.units, 0);
+  const unitsPerHour = buckets.length === 0 ? 0 : Math.round((totalUnits / buckets.length) * 60);
+  const peak = buckets.reduce<ThroughputBucket | null>((best, b) => (best === null || b.units > best.units ? b : best), null);
+  return { totalUnits, unitsPerHour, peak };
 }
