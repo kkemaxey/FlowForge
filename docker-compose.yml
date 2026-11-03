@@ -1,0 +1,56 @@
+# Local development stack: MySQL 8.0 + the FastAPI backend.
+# The frontend runs outside Docker with local Node (cd frontend && npm run dev).
+#
+#   docker compose up -d --build   start everything in the background
+#   docker compose ps              show container status
+#   docker compose logs -f backend follow backend logs
+#   docker compose down            stop (data survives in the db_data volume)
+#
+# Secrets live in backend/.env (gitignored); copy backend/.env.example to start.
+
+services:
+  db:
+    image: mysql:8.0
+    env_file: backend/.env
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+      - --default-time-zone=+00:00
+      # The binary log is only for replication. With it on, MySQL lets only admin users create
+      # triggers, and the migration (run as the app user) creates the events triggers.
+      - --skip-log-bin
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+      # Runs once, on the first start with an empty volume: creates the test database.
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # 127.0.0.1 forces TCP: the temporary server MySQL runs during first-time setup
+      # has networking off, so this only passes once the real server is accepting connections.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  backend:
+    build: ./backend
+    env_file: backend/.env
+    environment:
+      # Background assigner: a greedy pass every ASSIGNER_INTERVAL_SECONDS (default 2).
+      # Tests turn it off themselves.
+      ASSIGNER_LOOP_ENABLED: "true"
+    # --reload + the bind mount below pick up code edits without rebuilding the image.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:

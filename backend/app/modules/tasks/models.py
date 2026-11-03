@@ -11,10 +11,8 @@ from app.core.database import Base, BigId, Timestamp3, TinyInt, UnsignedInt, utc
 class TaskStatus(str, enum.Enum):
     open = "open"
     assigned = "assigned"
-    in_progress = "in_progress"
     picked = "picked"
     exception = "exception"
-    cancelled = "cancelled"
 
 
 class Task(Base):
@@ -22,6 +20,7 @@ class Task(Base):
     __table_args__ = (
         Index("tasks_location_id_status_index", "location_id", "status"),
         Index("tasks_order_id_status_index", "order_id", "status"),
+        # Serves the work queue: WHERE status = 'open' ORDER BY priority DESC, created_at.
         Index("tasks_status_priority_created_at_index", "status", "priority", "created_at"),
     )
 
@@ -35,9 +34,9 @@ class Task(Base):
         Enum(TaskStatus, name="task_status", values_callable=lambda e: [m.value for m in e]),
         default=TaskStatus.open,
     )
-    priority: Mapped[int] = mapped_column(TinyInt, default=0)
-    version: Mapped[int] = mapped_column(Integer)
+    # Copied from the order (and raised on expedite) so the work queue needs only one index.
+    priority: Mapped[int] = mapped_column(TinyInt, default=0, server_default="0")
+    # Changed only by the compare-and-set transition(), never by the ORM.
+    version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(Timestamp3, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(Timestamp3, default=utcnow, onupdate=utcnow)
-
-    __mapper_args__ = {"version_id_col": version}

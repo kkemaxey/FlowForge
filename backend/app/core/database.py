@@ -22,8 +22,12 @@ Timestamp3 = DateTime().with_variant(mysql.DATETIME(fsp=3), "mysql")
 
 
 def utcnow() -> datetime:
-    """Naive UTC timestamp; all DATETIME(3) columns store UTC."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Naive UTC timestamp at millisecond precision; all DATETIME(3) columns store UTC.
+
+    Cut to milliseconds so the value in memory matches what MySQL stores.
+    """
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    return now.replace(microsecond=now.microsecond // 1000 * 1000)
 
 
 connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}

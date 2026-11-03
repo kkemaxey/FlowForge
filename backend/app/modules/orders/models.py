@@ -18,11 +18,8 @@ from app.core.database import Base, BigId, Timestamp3, TinyInt, UnsignedInt, utc
 
 
 class OrderStatus(str, enum.Enum):
-    received = "received"
-    released = "released"
-    in_progress = "in_progress"
+    open = "open"
     complete = "complete"
-    cancelled = "cancelled"
 
 
 class Order(Base):
@@ -31,23 +28,23 @@ class Order(Base):
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True)
     run_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("sim_runs.id"))
+    # Unique so a retried intake request returns the existing order instead of a duplicate.
     external_ref: Mapped[str] = mapped_column(String(64), unique=True)
     status: Mapped[OrderStatus] = mapped_column(
         Enum(OrderStatus, name="order_status", values_callable=lambda e: [m.value for m in e]),
-        default=OrderStatus.received,
+        default=OrderStatus.open,
     )
-    priority: Mapped[int] = mapped_column(TinyInt, default=0)
-    expedited: Mapped[bool] = mapped_column(Boolean, default=False)
-    received_at: Mapped[datetime] = mapped_column(Timestamp3, default=utcnow)
+    priority: Mapped[int] = mapped_column(TinyInt, default=0, server_default="0")
+    expedited: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     due_at: Mapped[datetime | None] = mapped_column(Timestamp3)
+    created_at: Mapped[datetime] = mapped_column(Timestamp3, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(Timestamp3)
-    version: Mapped[int] = mapped_column(Integer)
+    # Changed only by explicit compare-and-set updates, never by the ORM.
+    version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     lines: Mapped[list["OrderLine"]] = relationship(
         back_populates="order", order_by="OrderLine.line_no", cascade="all, delete-orphan"
     )
-
-    __mapper_args__ = {"version_id_col": version}
 
 
 class OrderLine(Base):

@@ -2,7 +2,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import Computed, Enum, ForeignKey, Index, Integer, String
+from sqlalchemy import Computed, Enum, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base, BigId, Timestamp3, utcnow
@@ -25,6 +25,8 @@ class Assignment(Base):
     __table_args__ = (
         Index("assignments_worker_id_assigned_at_index", "worker_id", "assigned_at"),
         Index("assignments_task_id_index", "task_id"),
+        UniqueConstraint("active_task_id", name="uq_one_open_per_task"),
+        UniqueConstraint("active_worker_id", name="uq_one_open_per_worker"),
     )
 
     id: Mapped[int] = mapped_column(BigId, primary_key=True)
@@ -34,7 +36,8 @@ class Assignment(Base):
         Enum(AssignmentSource, name="assignment_source", values_callable=lambda e: [m.value for m in e])
     )
     algorithm: Mapped[str | None] = mapped_column(String(32))
-    travel_cost: Mapped[int | None] = mapped_column(Integer)
+    # What the assigner minimised for this pairing (Manhattan distance for greedy_v1).
+    score: Mapped[float | None] = mapped_column(Float)
     assigned_at: Mapped[datetime] = mapped_column(Timestamp3, default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(Timestamp3)
     ended_at: Mapped[datetime | None] = mapped_column(Timestamp3)
@@ -46,8 +49,8 @@ class Assignment(Base):
     # assignment is open (NULL once ended_at is set), so the unique keys allow at most one open
     # assignment per task and per worker. Many NULLs are allowed. CASE works on MySQL and SQLite.
     active_task_id: Mapped[int | None] = mapped_column(
-        BigId, Computed("CASE WHEN ended_at IS NULL THEN task_id END", persisted=True), unique=True
+        BigId, Computed("CASE WHEN ended_at IS NULL THEN task_id END", persisted=True)
     )
     active_worker_id: Mapped[int | None] = mapped_column(
-        Integer, Computed("CASE WHEN ended_at IS NULL THEN worker_id END", persisted=True), unique=True
+        Integer, Computed("CASE WHEN ended_at IS NULL THEN worker_id END", persisted=True)
     )
