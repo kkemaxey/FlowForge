@@ -36,8 +36,14 @@ class TaskException(Base):
     id: Mapped[int] = mapped_column(BigId, primary_key=True)
     task_id: Mapped[int] = mapped_column(BigId, ForeignKey("tasks.id"))
     assignment_id: Mapped[int | None] = mapped_column(BigId, ForeignKey("assignments.id"))
+    run_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("sim_runs.id"))
     type: Mapped[ExceptionType] = mapped_column(
         Enum(ExceptionType, name="exception_type", values_callable=lambda e: [m.value for m in e])
     )
+    # For a stockout: how many units the picker actually found in the bin.
+    qty_found: Mapped[int | None] = mapped_column(Integer)
+    # The bin where the problem happened, and the bin the task moved to (NULL if it didn't move).
+    from_location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"))
+    rerouted_to_location_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("locations.id"))
     opened_at: Mapped[datetime] = mapped_column(Timestamp3, default=utcnow)
     resolved_at: Mapped[datetime | None] = mapped_column(Timestamp3)
