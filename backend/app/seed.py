@@ -35,8 +35,12 @@ SKU_NAMES = [
     "Salomon XT-6", "Hoka Clifton 9", "On Cloud 5", "Timberland 6-Inch Boot", "Crocs Classic Clog",
 ]
 
-# SKUs stocked thinly across several bins, so an order for a few units must split into tasks.
+# SKUs stocked across several bins, so an order can split into tasks once a bin runs low.
 SPLIT_SKUS = {"SKU-0001": (3, 4), "SKU-0002": (3, 3), "SKU-0003": (2, 5)}  # code: (bins, qty per bin)
+
+# Scales every seeded quantity, so a demo doesn't run out of stock within minutes. Picks only ever
+# remove stock and intake rejects what it can't cover, so this sets how long a demo can run.
+STOCK_MULTIPLIER = 10
 
 # Humans start along the front walkway near the pick stations; robots start at the back.
 WORKERS = [
@@ -79,7 +83,7 @@ def build_inventory(rng: random.Random, skus: list[Sku], bins: list[Location]) -
             quantities = [rng.randint(10, 40) for _ in range(rng.randint(1, 2))]
         for qty in quantities:
             location = free_bins.pop()
-            rows.append(Inventory(location_id=location.id, sku_id=sku.id, qty_on_hand=qty))
+            rows.append(Inventory(location_id=location.id, sku_id=sku.id, qty_on_hand=qty * STOCK_MULTIPLIER))
     return rows
 
 
