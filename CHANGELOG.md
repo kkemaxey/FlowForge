@@ -59,6 +59,8 @@ and the backend's 10 × 10 demo warehouse (2026-11-02).
   quantities no larger than the bin holds) and assigns tasks to the 10 demo
   workers (2026-11-02).
 - Trimmed comments that restated the code or named an owner (2026-11-02).
+- Regenerated `frontend/package-lock.json` so `npm ci` (and the frontend CI
+  job) installs again (2026-11-02).
 
 ### Removed
 
@@ -70,8 +72,6 @@ and the backend's 10 × 10 demo warehouse (2026-11-02).
 - The live board types live in `live-board/data.ts` until they are reviewed
   for the shared `types/index.ts`; the shared `TaskStatus` has no `exception`
   value yet.
-- `frontend/package-lock.json` is out of sync with `package.json`, so
-  `npm ci` fails.
 
 ## [0.2.0] - 2026-09-30
 
