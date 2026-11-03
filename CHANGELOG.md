@@ -5,6 +5,21 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-11-03
+
+Order list endpoint for the live board, by Kanayo.
+
+### Added
+
+- `GET /api/v1/orders`: orders newest first as `{items, count}`, with their
+  lines and tasks. `limit` defaults to 50, maximum 500.
+- `completed_at` in `OrderOut`, on every endpoint that returns an order.
+
+### Changed
+
+- Order responses are built in two queries however many orders are returned,
+  instead of two queries per order.
+
 ## [0.10.0] - 2026-11-03
 
 Review fixes for the live board and portal (Jayden, 2026-11-03): one

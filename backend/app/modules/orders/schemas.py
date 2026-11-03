@@ -45,4 +45,10 @@ class OrderOut(BaseModel):
     expedited: bool
     due_at: UtcDatetime | None
     created_at: UtcDatetime
+    completed_at: UtcDatetime | None
     lines: list[OrderLineOut]
+
+
+class OrderListOut(BaseModel):
+    items: list[OrderOut]
+    count: int  # number of items in this response

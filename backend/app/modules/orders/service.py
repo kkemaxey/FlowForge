@@ -4,6 +4,7 @@ Everything for one order (order, lines, tasks, reservations, events) commits in 
 transaction, so a failure anywhere leaves nothing behind.
 """
 from collections import defaultdict
+from collections.abc import Sequence
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +14,7 @@ from app.core.database import utcnow
 from app.core.errors import ApiError
 from app.modules.events.models import Event
 from app.modules.orders.models import Order, OrderLine, OrderStatus
-from app.modules.orders.schemas import OrderCreate, OrderLineOut, OrderOut, OrderTaskOut
+from app.modules.orders.schemas import OrderCreate, OrderLineOut, OrderListOut, OrderOut, OrderTaskOut
 from app.modules.simulation.models import SimRun
 from app.modules.tasks.models import Task, TaskStatus
 from app.modules.warehouse.models import Inventory, Location, Sku
@@ -111,19 +112,38 @@ def expedite_order(session: Session, order_id: int) -> Order:
     return order
 
 
+def list_orders(session: Session, limit: int) -> OrderListOut:
+    """Orders, newest first. id breaks ties between orders created in the same millisecond."""
+    orders = session.scalars(select(Order).order_by(Order.created_at.desc(), Order.id.desc()).limit(limit)).all()
+    items = _orders_out(session, orders)
+    return OrderListOut(items=items, count=len(items))
+
+
 def order_out(session: Session, order: Order) -> OrderOut:
     """The order with its lines, and each line's tasks with their bin locations."""
-    lines = session.execute(
+    return _orders_out(session, [order])[0]
+
+
+def _orders_out(session: Session, orders: Sequence[Order]) -> list[OrderOut]:
+    """Build the response for many orders in two queries, however many orders there are."""
+    if not orders:
+        return []
+    order_ids = [order.id for order in orders]
+
+    lines_by_order: dict[int, list[tuple[OrderLine, str]]] = defaultdict(list)
+    for line, code in session.execute(
         select(OrderLine, Sku.code)
         .join(Sku, Sku.id == OrderLine.sku_id)
-        .where(OrderLine.order_id == order.id)
+        .where(OrderLine.order_id.in_(order_ids))
         .order_by(OrderLine.line_no)
-    ).all()
+    ):
+        lines_by_order[line.order_id].append((line, code))
+
     tasks_by_line: dict[int, list[OrderTaskOut]] = defaultdict(list)
     for task, location in session.execute(
         select(Task, Location)
         .join(Location, Location.id == Task.location_id)
-        .where(Task.order_id == order.id)
+        .where(Task.order_id.in_(order_ids))
         .order_by(Task.id)
     ):
         tasks_by_line[task.order_line_id].append(
@@ -135,22 +155,26 @@ def order_out(session: Session, order: Order) -> OrderOut:
                 location=LocationOut.of(location),
             )
         )
-    return OrderOut(
-        order_id=order.id,
-        external_ref=order.external_ref,
-        run_id=order.run_id,
-        status=order.status,
-        priority=order.priority,
-        expedited=order.expedited,
-        due_at=order.due_at,
-        created_at=order.created_at,
-        lines=[
-            OrderLineOut(
-                order_line_id=line.id, sku_code=code, qty_ordered=line.qty_ordered, tasks=tasks_by_line[line.id]
-            )
-            for line, code in lines
-        ],
-    )
+    return [
+        OrderOut(
+            order_id=order.id,
+            external_ref=order.external_ref,
+            run_id=order.run_id,
+            status=order.status,
+            priority=order.priority,
+            expedited=order.expedited,
+            due_at=order.due_at,
+            created_at=order.created_at,
+            completed_at=order.completed_at,
+            lines=[
+                OrderLineOut(
+                    order_line_id=line.id, sku_code=code, qty_ordered=line.qty_ordered, tasks=tasks_by_line[line.id]
+                )
+                for line, code in lines_by_order[order.id]
+            ],
+        )
+        for order in orders
+    ]
 
 
 def _find_by_ref(session: Session, external_ref: str) -> Order | None:

@@ -1,11 +1,14 @@
-"""POST /api/v1/orders and GET /api/v1/orders/{id} against the MySQL test database."""
+"""POST /api/v1/orders, GET /api/v1/orders and GET /api/v1/orders/{id} against the MySQL test database."""
 import re
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.event import listen, remove
 
+from app.core.database import engine
 from app.modules.events.models import Event
-from app.modules.orders.models import Order, OrderLine
+from app.modules.orders.models import Order, OrderLine, OrderStatus
 from app.modules.simulation.models import SimRun
 from app.modules.tasks.models import Task
 from app.modules.warehouse.models import Inventory, Location, LocationKind, Sku
@@ -226,3 +229,105 @@ def test_get_order_returns_lines_and_tasks(client, db, warehouse):
 
 def test_get_missing_order_is_404(client, db):
     assert_error(client.get(f"{URL}/12345"), 404, "order_not_found")
+
+
+def test_list_orders_empty(client, db):
+    response = client.get(URL)
+
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "count": 0}
+
+
+def test_list_orders_newest_first_with_id_breaking_ties(client, db, floor):
+    t0 = datetime(2026, 11, 3, 12, 0, 0)
+    oldest, tied_low, tied_high, newest = [floor.order() for _ in range(4)]
+    oldest.created_at = t0
+    tied_low.created_at = t0 + timedelta(minutes=1)
+    tied_high.created_at = t0 + timedelta(minutes=1)
+    newest.created_at = t0 + timedelta(minutes=2)
+    db.get(Order, floor.order_id).created_at = t0 - timedelta(minutes=1)
+    db.commit()
+
+    body = client.get(URL).json()
+
+    assert [item["order_id"] for item in body["items"]] == [
+        newest.id, tied_high.id, tied_low.id, oldest.id, floor.order_id,
+    ]
+    assert body["count"] == 5
+
+
+def test_list_orders_limit_keeps_the_newest(client, db, floor):
+    t0 = datetime(2026, 11, 3, 12, 0, 0)
+    orders = [floor.order() for _ in range(3)]
+    for minutes, order in enumerate(orders):
+        order.created_at = t0 + timedelta(minutes=minutes)
+    db.get(Order, floor.order_id).created_at = t0 - timedelta(minutes=1)
+    db.commit()
+
+    body = client.get(URL, params={"limit": 2}).json()
+
+    assert [item["order_id"] for item in body["items"]] == [orders[2].id, orders[1].id]
+    assert body["count"] == 2
+
+
+def test_list_orders_default_limit_is_50(client, db, floor):
+    for _ in range(50):
+        floor.order()  # 51 orders with the one floor starts with
+
+    assert client.get(URL).json()["count"] == 50
+
+
+@pytest.mark.parametrize("limit", [0, 501, "many"])
+def test_list_orders_bad_limit_is_422(client, db, limit):
+    assert_error(client.get(URL, params={"limit": limit}), 422, "validation_error")
+
+
+def test_order_completed_at_is_returned(client, db, floor):
+    finished = floor.order(status=OrderStatus.complete)
+    finished.completed_at = datetime(2026, 11, 3, 12, 30, 0)
+    db.commit()
+
+    items = {item["order_id"]: item for item in client.get(URL).json()["items"]}
+
+    assert items[finished.id]["completed_at"] == "2026-11-03T12:30:00.000Z"
+    assert items[floor.order_id]["completed_at"] is None
+    assert client.get(f"{URL}/{finished.id}").json()["completed_at"] == "2026-11-03T12:30:00.000Z"
+
+
+def test_list_orders_keeps_lines_and_tasks_on_the_right_order(client, db, warehouse):
+    bodies = [
+        order_body(warehouse, ref="ORD-A"),
+        order_body(warehouse, ref="ORD-B", lines=[{"sku_code": "SKU-B", "qty": 5}]),
+        order_body(warehouse, ref="ORD-C", lines=[{"sku_code": "SKU-C", "qty": 5}, {"sku_code": "SKU-A", "qty": 1}]),
+    ]
+    created = {}
+    for body in bodies:
+        order = client.post(URL, json=body).json()
+        created[order["order_id"]] = order
+
+    listed = client.get(URL).json()["items"]
+
+    assert {item["order_id"]: item for item in listed} == created
+
+
+def test_list_orders_query_count_does_not_grow_with_orders(client, db, warehouse):
+    def selects_for_list() -> int:
+        statements = []
+
+        def record(conn, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        listen(engine, "before_cursor_execute", record)
+        try:
+            assert client.get(URL).status_code == 200
+        finally:
+            remove(engine, "before_cursor_execute", record)
+        return len(statements)
+
+    client.post(URL, json=order_body(warehouse, ref="ORD-1", lines=[{"sku_code": "SKU-A", "qty": 1}]))
+    with_one_order = selects_for_list()
+    for ref in ("ORD-2", "ORD-3", "ORD-4"):
+        client.post(URL, json=order_body(warehouse, ref=ref, lines=[{"sku_code": "SKU-A", "qty": 1}]))
+
+    assert selects_for_list() == with_one_order
