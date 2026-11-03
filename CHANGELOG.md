@@ -20,9 +20,7 @@ writes as tasks and orders.
   `worker_not_found`.
 - `POST /api/v1/workers` (`{name, kind, x, y, speed?}`): 201 with a
   `Location` header. New workers start `idle`, active, at version 0. Sending
-  `status`, `is_active` or `version` is a 422. A position outside the grid
-  (the largest `x`/`y` in `locations`) is 422 `position_off_grid`; with no
-  locations yet the check is skipped.
+  `status`, `is_active` or `version` is a 422, as is a negative `x` or `y`.
 - `PATCH /api/v1/workers/{worker_id}` (`{expected_version, name?, kind?, x?,
   y?, speed?}`): a compare-and-set on `workers.version` that applies only the
   fields that differ. Returns 409 `version_conflict`, 409 `worker_busy`
@@ -40,7 +38,7 @@ writes as tasks and orders.
 - Migration `0003`: `workers.version` (default 0) and `workers.updated_at`
   (existing rows get the migration time).
 - `tests/test_workforce_api.py` and `tests/test_workforce_service.py`
-  (61 tests).
+  (51 tests).
 
 ### Changed
 
@@ -51,6 +49,11 @@ writes as tasks and orders.
 ### Known issues
 
 - Auth is not applied to these endpoints yet (MVP-wide).
+- Positions have no upper bound: nothing in the schema records the warehouse's
+  size (`locations` has only bins and stations, so its largest `x`/`y` misses
+  walkway column 9 and the robots' row 9). Proposed: `WAREHOUSE_WIDTH` and
+  `WAREHOUSE_HEIGHT` settings (default 10 × 10) and a 422 `position_off_grid`
+  check, to agree with Kanayo since it touches `core/config.py`.
 - The assigner's worker status changes (idle ↔ busy) don't bump
   `workers.version` yet, so a client's `expected_version` doesn't notice them.
   PATCH and DELETE lock the worker row, so they still see the current status.

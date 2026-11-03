@@ -9,7 +9,7 @@ Every change writes its event (worker_created, worker_updated, worker_deactivate
 transaction.
 """
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -17,37 +17,20 @@ from app.core.database import utcnow
 from app.core.errors import ApiError
 from app.modules.assignment.models import Assignment
 from app.modules.events.models import Event
-from app.modules.warehouse.models import Location
 from app.modules.workforce.models import Worker, WorkerKind, WorkerStatus
 from app.modules.workforce.schemas import WorkerCreate, WorkerListOut, WorkerOut, WorkerUpdate
 
-# Largest x and y on the warehouse grid; positions run 0..max inclusive.
-GridBounds = tuple[int, int]
-
-
-def position_in_bounds(x: int, y: int, bounds: GridBounds | None) -> bool:
-    """True if (x, y) is on the grid. No bounds (no locations yet) means there is nothing to check."""
-    if bounds is None:
-        return True
-    max_x, max_y = bounds
-    return 0 <= x <= max_x and 0 <= y <= max_y
-
-
-def grid_bounds(session: Session) -> GridBounds | None:
-    """The grid is the locations table: its largest x and y. None if there are no locations."""
-    max_x, max_y = session.execute(select(func.max(Location.x), func.max(Location.y))).one()
-    return None if max_x is None else (max_x, max_y)
-
-
-def check_position(session: Session, x: int, y: int) -> None:
-    bounds = grid_bounds(session)
-    if not position_in_bounds(x, y, bounds):
-        max_x, max_y = bounds
-        raise ApiError(
-            422,
-            "position_off_grid",
-            f"Position ({x}, {y}) is off the {max_x + 1} x {max_y + 1} grid (x 0-{max_x}, y 0-{max_y})",
-        )
+# Position rule: x and y only have to be non-negative (enforced by WorkerCreate/WorkerUpdate).
+# There is no upper bound yet because nothing in the schema records the warehouse's size: the
+# locations table only has bins and stations, so the largest x/y in it undercounts the grid
+# (the seeded 10 x 10 warehouse has no rows in walkway column 9 or open-floor row 9, where
+# robots start).
+#
+# Planned (to agree with Kanayo, since it touches the shared core): add WAREHOUSE_WIDTH and
+# WAREHOUSE_HEIGHT to core/config.py (default 10 x 10, matching seed.py), then check
+# 0 <= x < width and 0 <= y < height in create_worker and in update_worker when x or y change,
+# raising ApiError(422, "position_off_grid", ...). Replace the settings with the warehouse's own
+# dimensions if a warehouses table is added later.
 
 
 def get_worker(session: Session, worker_id: int, for_update: bool = False) -> Worker:
@@ -86,7 +69,6 @@ def list_workers(
 
 
 def create_worker(session: Session, payload: WorkerCreate) -> Worker:
-    check_position(session, payload.x, payload.y)
     now = utcnow()
     worker = Worker(
         name=payload.name,
@@ -139,8 +121,6 @@ def update_worker(session: Session, worker_id: int, payload: WorkerUpdate) -> Wo
         moving = "x" in changes or "y" in changes
         if moving and worker.status == WorkerStatus.busy:
             raise ApiError(409, "worker_busy", f"Worker {worker_id} is busy; it can be moved once it is idle")
-        if moving:
-            check_position(session, changes.get("x", worker.x), changes.get("y", worker.y))
 
         now = utcnow()
         result = session.execute(

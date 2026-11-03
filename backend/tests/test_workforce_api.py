@@ -3,22 +3,9 @@ import pytest
 from sqlalchemy import select
 
 from app.modules.events.models import Event
-from app.modules.warehouse.models import Location, LocationKind
 from app.modules.workforce.models import Worker, WorkerStatus
 
 URL = "/api/v1/workers"
-
-
-@pytest.fixture
-def grid(db):
-    """Two locations that make the grid 10 x 6 (x 0..9, y 0..5)."""
-    db.add_all(
-        [
-            Location(x=0, y=0, kind=LocationKind.pick_station),
-            Location(x=9, y=5, kind=LocationKind.storage),
-        ]
-    )
-    db.commit()
 
 
 def create(client, **overrides):
@@ -79,19 +66,21 @@ def test_create_defaults_speed_to_one(client, db):
     assert response.json()["speed"] == 1.0
 
 
-def test_create_off_grid_is_422(client, db, grid):
-    response = create(client, x=10, y=0)
+def test_create_accepts_any_non_negative_position(client, db):
+    # No upper bound until the warehouse size is recorded somewhere (see workforce/service.py).
+    edge = create(client, x=9, y=9)
+    far = create(client, name="Far", x=40, y=25)
+
+    assert edge.status_code == 201
+    assert far.status_code == 201
+
+
+@pytest.mark.parametrize("position", [{"x": -1}, {"y": -1}])
+def test_create_negative_position_is_422(client, db, position):
+    response = create(client, **position)
 
     assert response.status_code == 422
-    assert response.json()["code"] == "position_off_grid"
-    assert "(10, 0)" in response.json()["detail"]
-    assert "10 x 6" in response.json()["detail"]
-    db.rollback()
-    assert db.scalars(select(Worker)).all() == []
-
-
-def test_create_on_grid_edge_is_accepted(client, db, grid):
-    assert create(client, x=9, y=5).status_code == 201
+    assert response.json()["code"] == "validation_error"
 
 
 @pytest.mark.parametrize("field", ["status", "is_active", "version"])
@@ -292,14 +281,14 @@ def test_patch_inactive_worker_is_409(client, db, floor):
     assert response.json()["code"] == "worker_inactive"
 
 
-def test_patch_off_grid_is_422(client, db, floor, grid):
-    worker = floor.worker(1, 1)
+def test_patch_can_move_onto_row_and_column_nine(client, db, floor):
+    # Regression: the seeded robots start on row 9, which has no location rows.
+    worker = floor.worker(9, 9)
 
-    response = client.patch(f"{URL}/{worker.id}", json={"expected_version": 0, "y": 6})
+    response = client.patch(f"{URL}/{worker.id}", json={"expected_version": 0, "y": 8})
 
-    assert response.status_code == 422
-    assert response.json()["code"] == "position_off_grid"
-
+    assert response.status_code == 200
+    assert (response.json()["x"], response.json()["y"]) == (9, 8)
 
 def test_patch_unknown_is_404(client, db):
     response = client.patch(f"{URL}/999999", json={"expected_version": 0, "name": "X"})
