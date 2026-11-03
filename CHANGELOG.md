@@ -39,12 +39,21 @@ writes as tasks and orders.
   (existing rows get the migration time).
 - `tests/test_workforce_api.py` and `tests/test_workforce_service.py`
   (51 tests).
+- Workforce panel on `/console` (`frontend/app/console/workforce/`): worker
+  table with a "Show deactivated" toggle, add/edit form with field-level
+  validation messages, and deactivate with an inline confirm. Works against
+  `/api/v1/workers` or an in-browser mock with the same rules
+  (`NEXT_PUBLIC_USE_MOCKS`).
 
 ### Changed
 
 - The workforce router moved from the `/workforce` placeholder to
   `/api/v1/workers`.
 - Root `.gitignore` now ignores `.env`, `.venv/` and `.coverage`.
+- `frontend/lib/api-client.ts`: `apiFetch` returns `undefined` for a 204 and
+  throws `ApiRequestError` (`status`, `code`, `detail`, `errors`) on errors;
+  the error message is unchanged. `WorkerStatus` now includes `down` and
+  `offline`.
 
 ### Known issues
 
