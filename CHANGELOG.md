@@ -5,6 +5,35 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-11-03
+
+Pick completion, exceptions, metrics and the worker simulator, by Kendyn,
+rebuilt on `main` by Kanayo.
+
+### Added
+
+- `POST /api/v1/tasks/{id}/pick`: removes the stock, closes the assignment,
+  frees the worker at the bin, and completes the order on its last pick.
+- `POST /api/v1/tasks/{id}/exceptions`: handles a `stockout`, `jam` or
+  `worker_down`. A stockout or jam moves the task to the nearest bin that can
+  cover it. A worker going down reopens the task in place. A task with no bin
+  to move to becomes `exception` and waits for the supervisor.
+- `GET /api/v1/exceptions`: newest first as `{items, count}`, filtered by
+  `open=true|false`.
+- `POST /api/v1/simulation/workers/{id}/recover`: brings a downed worker back
+  to idle.
+- `GET /api/v1/simulation/assignments/active`: what the simulator polls.
+- `GET /api/v1/events/metrics` and `GET /api/v1/events/metrics/throughput`, in
+  the shapes the live board expects.
+- The worker simulator, which only uses the HTTP API. Run it with
+  `python -m app.modules.simulation.cli run`, and force a failure with `trigger`.
+- Migration `0004`: `run_id`, `qty_found`, `from_location_id` and
+  `rerouted_to_location_id` on `exceptions`.
+
+### Changed
+
+- Reassigning a task stuck in `exception` now resolves its open exception.
+
 ## [0.12.0] - 2026-11-03
 
 Location list endpoint for the warehouse grid, by Kanayo.
