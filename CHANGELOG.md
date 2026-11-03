@@ -5,6 +5,24 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-11-03
+
+Grid map and reassign/expedite controls on the console, by Aalan, connected to
+live data by Kanayo.
+
+### Added
+
+- `GridMap` on the console: locations, workers by kind and status, and tasks in
+  their bins, with a distinct marker for exceptions.
+- `Controls` on the console: reassign a task to an idle worker, expedite an
+  order, and start or stop the order generator.
+- `ConsoleDataProvider`: polls workers and unfinished tasks every 2 seconds, so
+  the grid and controls show the same data.
+
+### Removed
+
+- `frontend/app/console/page.tsx`, replaced by the portal's console page.
+
 ## [0.13.0] - 2026-11-03
 
 Pick completion, exceptions, metrics and the worker simulator, by Kendyn,
