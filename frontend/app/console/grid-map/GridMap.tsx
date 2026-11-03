@@ -1,6 +1,8 @@
 import { Card } from "@/components/ui/Card";
 
-import type { GridLocation, GridTask, GridWorker, LocationKind, WorkerStatus } from "../types";
+import type { Worker, WorkerStatus } from "@/types";
+
+import type { GridLocation, GridTask, LocationKind } from "../types";
 
 const KIND_SYMBOL: Record<LocationKind, string> = { storage: "S", pick_station: "P", dock: "D", charger: "C" };
 
@@ -15,9 +17,10 @@ const STATUS_CLASS: Record<WorkerStatus, string> = {
   idle: "bg-emerald-600 text-white",
   busy: "bg-amber-500 text-black",
   down: "bg-zinc-500 text-white line-through",
+  offline: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
 };
 
-const STATUS_SYMBOL: Record<WorkerStatus, string> = { idle: "i", busy: "b", down: "x" };
+const STATUS_SYMBOL: Record<WorkerStatus, string> = { idle: "i", busy: "b", down: "x", offline: "o" };
 
 function key(x: number, y: number) {
   return `${x},${y}`;
@@ -34,20 +37,24 @@ function group<T>(items: T[], at: (item: T) => string) {
 
 export interface GridMapProps {
   locations: GridLocation[];
-  workers: GridWorker[];
+  workers: Worker[];
   tasks: GridTask[];
+  // The walkways have no location row, so the data alone can't show the outer rows and columns once
+  // workers leave them. These keep the grid from shrinking as workers move.
+  minWidth?: number;
+  minHeight?: number;
 }
 
-export function GridMap({ locations, workers, tasks }: GridMapProps) {
+export function GridMap({ locations, workers, tasks, minWidth = 0, minHeight = 0 }: GridMapProps) {
   // Size comes from the data: the largest coordinate plus 1.
   const all = [...locations, ...workers, ...tasks.map((t) => t.location)];
-  const width = all.reduce((m, p) => Math.max(m, p.x + 1), 0);
-  const height = all.reduce((m, p) => Math.max(m, p.y + 1), 0);
+  const width = all.reduce((m, p) => Math.max(m, p.x + 1), locations.length > 0 ? minWidth : 0);
+  const height = all.reduce((m, p) => Math.max(m, p.y + 1), locations.length > 0 ? minHeight : 0);
 
   const locationAt = new Map(locations.map((l) => [key(l.x, l.y), l]));
   const workersAt = group(workers, (w) => key(w.x, w.y));
   const tasksAt = group(tasks, (t) => key(t.location.x, t.location.y));
-  const workerById = new Map(workers.map((w) => [w.id, w]));
+  const workerById = new Map(workers.map((w) => [w.worker_id, w]));
 
   if (width === 0) {
     return <Card title="Grid map">No locations yet.</Card>;
@@ -84,11 +91,14 @@ export function GridMap({ locations, workers, tasks }: GridMapProps) {
                     `(${x}, ${y})`,
                     location ? `${location.kind.replace("_", " ")}${location.aisle ? ` ${location.aisle}` : ""}` : "walkway",
                     ...cellWorkers.map((w) => `${w.kind} ${w.name} ${w.status}`),
-                    ...cellTasks.map(
-                      (t) =>
-                        `task ${t.task_id} ${t.status}${t.current_assignment ? ` worker ${t.current_assignment.worker_id}` : ""}`,
-                    ),
+                    ...cellTasks.map((t) => {
+                      const assignee = t.current_assignment;
+                      const name = assignee && (workerById.get(assignee.worker_id)?.name ?? `#${assignee.worker_id}`);
+                      return `task ${t.task_id} ${t.status}${name ? ` → ${name}` : ""}`;
+                    }),
                   ].join(", ");
+                  // One chip per bin, so it fits the cell: an exception if there is one, plus a count.
+                  const chipTask = cellTasks.find((t) => t.status === "exception") ?? cellTasks[0];
                   return (
                     <td
                       key={x}
@@ -103,28 +113,25 @@ export function GridMap({ locations, workers, tasks }: GridMapProps) {
                           {KIND_SYMBOL[location.kind]}
                         </span>
                       )}
-                      {cellTasks.map((t) => {
-                        const holder = t.current_assignment && workerById.get(t.current_assignment.worker_id);
-                        const exception = t.status === "exception";
-                        return (
-                          <span
-                            key={t.task_id}
-                            className={`absolute right-0.5 top-0 rounded-sm px-0.5 text-[9px] font-bold ${
-                              exception
-                                ? "bg-red-600 text-white ring-2 ring-red-300 dark:ring-red-800"
-                                : "border border-sky-600 text-sky-700 dark:text-sky-300"
-                            }`}
-                          >
-                            {exception ? "!" : "T"}
-                            {t.task_id}
-                            {t.current_assignment && `→${holder?.name ?? `#${t.current_assignment.worker_id}`}`}
-                          </span>
-                        );
-                      })}
+                      {chipTask && (
+                        <span
+                          className={`absolute right-0.5 top-0 whitespace-nowrap rounded-sm px-0.5 text-[9px] font-bold ${
+                            chipTask.status === "exception"
+                              ? "bg-red-600 text-white ring-2 ring-red-300 dark:ring-red-800"
+                              : `border border-sky-600 text-sky-700 dark:text-sky-300 ${
+                                  chipTask.status === "open" ? "border-dashed" : ""
+                                }`
+                          }`}
+                        >
+                          {chipTask.status === "exception" ? "!" : "T"}
+                          {chipTask.task_id}
+                          {cellTasks.length > 1 && ` +${cellTasks.length - 1}`}
+                        </span>
+                      )}
                       <span className="flex flex-wrap justify-center gap-0.5">
                         {cellWorkers.map((w) => (
                           <span
-                            key={w.id}
+                            key={w.worker_id}
                             className={`inline-flex h-5 min-w-5 items-center justify-center px-0.5 text-[10px] font-bold ${
                               w.kind === "robot" ? "rounded-sm" : "rounded-full"
                             } ${STATUS_CLASS[w.status]}`}
@@ -144,9 +151,9 @@ export function GridMap({ locations, workers, tasks }: GridMapProps) {
       </div>
       <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400">
         <li>H round = human, R square = robot</li>
-        <li>i idle (green), b busy (amber), x down (grey)</li>
+        <li>i idle (green), b busy (amber), x down (grey), o offline</li>
         <li>S storage, P pick station</li>
-        <li>T# assigned task → worker</li>
+        <li>T# task in this bin: solid = assigned, dashed = waiting, +n = more. Hover for details</li>
         <li>
           <span className="font-bold text-red-600">!#</span> exception task
         </li>

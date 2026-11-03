@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Card } from "@/components/ui/Card";
-import { apiFetch } from "@/lib/api-client";
-import { MOCK_TASKS, MOCK_WORKERS } from "@/mocks/consoleMocks";
+import { apiFetch, ApiRequestError } from "@/lib/api-client";
 
-import type { GridTask, GridWorker } from "../types";
+import { useConsoleData, USE_MOCKS } from "../ConsoleData";
 
-const USE_MOCKS = (process.env.NEXT_PUBLIC_USE_MOCKS ?? "true") === "true";
+const GENERATOR_POLL_MS = 5000;
 
 interface GeneratorStatus {
   running: boolean;
@@ -16,11 +15,8 @@ interface GeneratorStatus {
   rejected: number;
 }
 
-// apiFetch is being changed to expose the backend's {detail, code}; read it from whichever shape it throws.
 function errorCode(err: unknown): string | undefined {
-  const e = err as { code?: unknown; body?: { code?: unknown } } | null;
-  const code = e?.code ?? e?.body?.code;
-  return typeof code === "string" ? code : undefined;
+  return err instanceof ApiRequestError ? err.code : undefined;
 }
 
 const btn =
@@ -29,8 +25,7 @@ const field =
   "rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900";
 
 export function Controls() {
-  const [tasks, setTasks] = useState<GridTask[]>([]);
-  const [workers, setWorkers] = useState<GridWorker[]>([]);
+  const { tasks, workers, error, refresh } = useConsoleData();
   const [taskId, setTaskId] = useState("");
   const [workerId, setWorkerId] = useState("");
   const [reason, setReason] = useState("");
@@ -41,50 +36,28 @@ export function Controls() {
   const [generator, setGenerator] = useState<GeneratorStatus | null>(null);
   const [generatorMessage, setGeneratorMessage] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (USE_MOCKS) {
-      setTasks(MOCK_TASKS);
-      setWorkers(MOCK_WORKERS);
-      return;
-    }
-    const [t, w] = await Promise.all([
-      apiFetch<{ items: GridTask[] }>("/api/v1/tasks?limit=500"),
-      apiFetch<GridWorker[]>("/api/v1/workers"),
-    ]);
-    setTasks(t.items);
-    setWorkers(w);
-  }, []);
-
   const refreshGenerator = useCallback(async () => {
     if (USE_MOCKS) return;
     setGenerator(await apiFetch<GeneratorStatus>("/api/v1/generator"));
   }, []);
 
+  // The generator's counts change on their own, so poll them while the panel is open.
   useEffect(() => {
+    if (USE_MOCKS) return;
     let cancelled = false;
     async function load() {
       try {
-        if (USE_MOCKS) {
-          setTasks(MOCK_TASKS);
-          setWorkers(MOCK_WORKERS);
-          return;
-        }
-        const [t, w, g] = await Promise.all([
-          apiFetch<{ items: GridTask[] }>("/api/v1/tasks?limit=500"),
-          apiFetch<GridWorker[]>("/api/v1/workers"),
-          apiFetch<GeneratorStatus>("/api/v1/generator"),
-        ]);
-        if (cancelled) return;
-        setTasks(t.items);
-        setWorkers(w);
-        setGenerator(g);
+        const status = await apiFetch<GeneratorStatus>("/api/v1/generator");
+        if (!cancelled) setGenerator(status);
       } catch {
-        if (!cancelled) setMessage("Could not load tasks and workers.");
+        // The console's own error message already says the backend is unreachable.
       }
     }
     void load();
+    const id = setInterval(load, GENERATOR_POLL_MS);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, []);
 
@@ -121,7 +94,7 @@ export function Controls() {
       else if (code === "invalid_transition") setMessage("This task has already been picked. Refreshed.");
       else if (code === "assignment_conflict") setMessage("Another change happened at the same time. Refreshed; try again.");
       else setMessage("Reassign failed.");
-      if (code) await refresh().catch(() => {});
+      if (code) await refresh();
     } finally {
       setBusy(false);
     }
@@ -189,7 +162,7 @@ export function Controls() {
             <select className={field} value={workerId} onChange={(e) => setWorkerId(e.target.value)}>
               <option value="">Select a worker…</option>
               {idleWorkers.map((w) => (
-                <option key={w.id} value={w.id}>
+                <option key={w.worker_id} value={w.worker_id}>
                   {w.name} ({w.kind})
                 </option>
               ))}
@@ -203,11 +176,9 @@ export function Controls() {
             <button className={btn} disabled={!selected || !workerId || busy} onClick={reassign}>
               Reassign
             </button>
-            <button className={btn} disabled={busy} onClick={() => refresh().catch(() => setMessage("Refresh failed."))}>
-              Refresh
-            </button>
           </div>
           {message && <p role="status">{message}</p>}
+          {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
         </section>
 
         <section aria-label="Expedite orders" className="flex flex-col gap-2">
@@ -228,7 +199,9 @@ export function Controls() {
         <section aria-label="Order generator" className="flex flex-col gap-2">
           <h3 className="font-medium">Order generator</h3>
           <p className="text-zinc-600 dark:text-zinc-400">
-            {generator ? (generator.running ? `Running · ${generator.created} created` : "Stopped") : "Status unknown"}
+            {generator
+              ? `${generator.running ? "Running" : "Stopped"} · ${generator.created} created · ${generator.rejected} rejected (out of stock)`
+              : "Status unknown"}
           </p>
           <div className="flex gap-2">
             <button className={btn} disabled={generator?.running} onClick={() => generatorAction("start")}>
