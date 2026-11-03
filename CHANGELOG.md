@@ -5,6 +5,112 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Simulation, exception handling, the event log and metrics (Kendyn), plus the
+first database tables and synthetic demo data. Branch `feature/simulation`.
+
+### Added
+
+- First real database schema: migration `0002_core_warehouse_tables` creates
+  `locations`, `skus`, `inventory`, `workers`, `orders`, `order_lines`,
+  `tasks`, `assignments`, `users`, `sim_runs`, `exceptions` and `events`.
+  Timestamps are `DATETIME(3)` on MySQL and stored as UTC. Status tables carry
+  a `version` column for compare-and-set updates; `assignments` is append-only.
+- Draft models in teammates' modules, each marked for its owner's review:
+  `orders/models.py` and `tasks/models.py` and `assignment/models.py` (Kanayo),
+  `workforce/models.py` (Trent), `auth/models.py` (Brock).
+- `simulation/models.py`: `Location`, `Sku`, `Inventory` (on_hand/reserved per
+  bin), `SimRun` and `TaskException`. Simulation now owns inventory and the map.
+- `events/models.py` and `events/service.py`: `record_event()` writes an event
+  inside the caller's transaction and stamps the active run. Event types:
+  `order_received`, `task_created`, `task_assigned`, `task_picked`,
+  `task_rerouted`, `task_exception`, `task_reopened`, `order_completed`,
+  `exception_opened`, `worker_status_changed`.
+- `POST /api/v1/tasks/{task_id}/exceptions` (`stockout`, `jam`, `worker_down`).
+  It works in one transaction: records the exception, closes the assignment as
+  `failed`, updates the worker, and reroutes the task to the nearest other bin
+  with enough unreserved stock, releasing and reserving inventory to match.
+  - Stockout sets the bin's `on_hand` to `qty_found`.
+  - If no bin has stock, the task goes to `exception` and waits for the
+    supervisor.
+  - On `worker_down`, the worker goes `down` and the task reopens in place.
+  - Exceptions the system handles itself are saved already resolved.
+  - Returns 404 for an unknown task or assignment, 409 when the state has
+    moved on or the version check fails, and 422 for bad input.
+- `GET /api/v1/exceptions?open=true|false`: unresolved (supervisor queue) or
+  resolved exceptions, newest first; all when `open` is omitted.
+- `POST /api/v1/tasks/{task_id}/pick`: completes a pick (takes stock out of the
+  bin, closes the assignment, frees the worker at the bin). When an order's
+  last task is picked, the order and its tasks move to `complete`.
+- `GET /api/v1/metrics/throughput?run_id=&window_minutes=`: `task_picked`
+  events for a run in the window, as `picks` and `picks_per_min`.
+- Simulator support endpoints: `GET /api/v1/simulation/runs/active`,
+  `POST /api/v1/simulation/runs`, `GET /api/v1/simulation/assignments/active`,
+  `POST /api/v1/simulation/workers/{id}/recover` and
+  `GET /api/v1/inventory/skus`.
+- Demo tooling, run from `backend/` as
+  `python -m app.modules.simulation.cli <command>`:
+  - `seed`: synthetic warehouse built through the models, with a fixed default
+    seed (480):
+    - One warehouse on a 10x10 grid: 45 locations (42 bins and 3 pick/pack
+      stations), with zones and aisles.
+    - 25 SKUs, one SKU per bin, about half of them in 2-3 bins, and 3
+      deliberately low-stock.
+    - 5 workers and 5 robots.
+    - A simulation run.
+    - Optional supervisor and simulator Firebase logins, from env vars.
+    - Sizes can be set with flags or `SEED_*` env vars.
+    - Re-running without `--reset` does nothing; `--reset` refuses
+      non-SQLite databases unless `FLOWFORGE_ALLOW_RESET=1`.
+  - `run`: the worker/robot simulator.
+    - Runs as a separate process and only goes through the API, signed in as
+      the `SIM_EMAIL` Firebase user (no auth bypass).
+    - Travel time is Manhattan distance / speed, plus the pick time.
+    - Exception probabilities, tick rate and worker speed come from flags or
+      `SIM_*` env vars; a seed makes runs repeatable.
+    - Downed workers recover after `--recovery-seconds`.
+  - `orders`: posts orders to `POST /api/v1/orders` at a set rate, using only
+    SKUs with stock, 1-4 lines each and a unique `external_ref`.
+  - `trigger`: raises a stockout, jam or worker_down on a task right away, for
+    live demos.
+  - `demo`: offline end-to-end run on a local `demo.db` (no server, no
+    Firebase) that prints throughput and exceptions.
+- `core/errors.py`: `ApiError` and handlers so every error body is
+  `{"detail": "...", "code": "..."}`, including validation errors.
+- `core/database.py`: shared `Timestamp` column type and `utcnow()`.
+- Tests: `tests/sim_fixtures.py` (shared in-memory DB and an authed client)
+  and test modules for events, seed, exceptions, the exceptions list, picks,
+  throughput, the simulator (including an end-to-end order) and the order
+  generator. 70 tests in total.
+- Frontend types for exceptions and throughput, the `exception` task status
+  and the `down` worker status in `frontend/types/index.ts`.
+- New env vars documented in `backend/.env.example`.
+
+### Changed
+
+- **All module routes now live under `/api/v1`** (`main.py` adds the prefix
+  when including routers). `/health` is unchanged.
+- The `events` router no longer uses an `/events` prefix; its endpoint is
+  `/api/v1/metrics/throughput`.
+
+### Known issues
+
+- Order intake, task generation and the greedy assigner (Kanayo) don't exist
+  yet. Until they do, `cli orders` gets 404s and `cli run` has nothing to
+  pick. `simulation/demo.py` has temporary stand-ins for both, used by the
+  demo and tests; remove them once the real ones land. Intake and the assigner
+  also need to call `record_event()` for `order_received`, `task_created` and
+  `task_assigned`.
+- The order payload `{external_ref, lines: [{sku_code, qty}]}` is assumed and
+  needs to match Kanayo's intake schema.
+- A jammed bin isn't blocked afterwards, so a task can be rerouted straight
+  back to it.
+- No endpoint resolves an exception yet; tasks in `exception` stay there.
+- Tested on SQLite only; row locks and `DATETIME(3)` haven't been run against
+  MySQL. Firebase sign-in for the simulator hasn't been tried with real
+  credentials.
+
 ## [0.2.0] - 2026-09-30
 
 Sprint 0 foundation filled in: a runnable backend and frontend skeleton, CI
