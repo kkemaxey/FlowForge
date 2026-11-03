@@ -18,12 +18,14 @@ from app.modules.generator.service import generator
 from app.modules.orders.router import router as orders_router
 from app.modules.simulation.router import router as simulation_router
 from app.modules.tasks.router import router as tasks_router
+from app.modules.warehouse.router import router as warehouse_router
 from app.modules.workforce.router import router as workforce_router
 
 ROUTERS = [
     auth_router,
     orders_router,
     tasks_router,
+    warehouse_router,
     assignment_router,
     simulation_router,
     workforce_router,

@@ -116,7 +116,9 @@ def test_item_shape_and_current_assignment(client, db, make_task, worker):
     assert item["order_line_id"] == task.order_line_id
     assert item["sku_code"] == "SKU-T"
     assert item["qty"] == 1
-    assert item["location"] == {"location_id": task.location_id, "x": 0, "y": 1, "zone": "A", "aisle": "A1"}
+    assert item["location"] == {
+        "location_id": task.location_id, "x": 0, "y": 1, "kind": "storage", "zone": "A", "aisle": "A1"
+    }
     assert item["status"] == "assigned"
     assert item["priority"] == 2
     assert item["version"] == 0

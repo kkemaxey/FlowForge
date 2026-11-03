@@ -5,6 +5,17 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-11-03
+
+Location list endpoint for the warehouse grid, by Kanayo.
+
+### Added
+
+- `GET /api/v1/locations`: every location as `{items, count}`, sorted by `y`
+  then `x`. Each item has `location_id`, `x`, `y`, `kind`, `zone` and `aisle`.
+- `kind` in `LocationOut`, so it also appears on the `location` object in order
+  and task responses.
+
 ## [0.11.0] - 2026-11-03
 
 Order list endpoint for the live board, by Kanayo.

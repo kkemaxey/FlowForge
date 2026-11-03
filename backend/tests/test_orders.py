@@ -97,7 +97,7 @@ def test_create_order_single_bin(client, db, warehouse):
     assert task["status"] == "open"
     assert task["version"] == 0
     assert task["location"] == {
-        "location_id": warehouse["bins"]["a1"], "x": 1, "y": 1, "zone": "A", "aisle": "A1"
+        "location_id": warehouse["bins"]["a1"], "x": 1, "y": 1, "kind": "storage", "zone": "A", "aisle": "A1"
     }
     assert reserved(db, warehouse["bins"]["a1"]) == 2
 
