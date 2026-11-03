@@ -1,128 +1,61 @@
 # Live board
 
-Owner: Jayden. Shows order and task status, throughput, WIP, on-time % and active exceptions. Polls every 2 seconds.
-Also renders the throughput chart on the metrics page (`/w/[id]/metrics`).
+Shows order and task status, throughput, WIP, on-time % and active exceptions on `/console`, polling every
+2 seconds. Also renders the throughput chart on `/metrics`.
 
 | File | Job |
 |---|---|
 | `LiveBoard.tsx` | The board UI |
 | `KpiStrip.tsx` | Throughput, WIP and on-time % tiles |
 | `ThroughputChart.tsx` | Units per minute over the last 30 minutes (metrics page) |
-| `useLiveBoard.ts` | Polls all three endpoints, tracks loading/error |
-| `boardLogic.ts` | Calculations behind the UI: exception list, WIP total, on-time %, order sorting, throughput summary |
-| `data.ts` | Types and `getOrders()` / `getTasks()` / `getMetrics()` / `getThroughput()` |
-| `mockData.ts` | In-browser simulator used until the backend endpoints exist |
+| `useLiveBoard.ts` | Polls orders, tasks and metrics; metrics are optional |
+| `boardLogic.ts` | Calculations behind the UI: task counts, WIP, exceptions, on-time %, sorting, throughput summary |
+| `data.ts` | The board's types, the getters, and the mapping from the backend's shapes onto those types |
+| `mockData.ts` | In-browser simulator used while `NEXT_PUBLIC_USE_MOCKS=true` |
 
 ## Mock vs. real API
 
 `NEXT_PUBLIC_USE_MOCKS` in `frontend/.env.local` picks the data source. It defaults to `"true"`. Set it to
-`"false"` to call the backend through `apiFetch` (Firebase token attached). Next.js inlines the value at build
-time, so restart `npm run dev` after changing it.
+`"false"` (and `NEXT_PUBLIC_API_URL=http://localhost:8080`) to call the backend. Next.js inlines these at build
+time, so restart `npm run dev` after changing them. A Firebase token is attached only when the
+`NEXT_PUBLIC_FIREBASE_*` values are set.
 
-## Endpoints the board needs
+## What the board calls
 
-All three are `GET`, need the Firebase token, and return JSON. Timestamps are ISO 8601 strings in UTC
-(`"2026-10-17T18:04:12Z"`). IDs are integers. Field names are snake_case, matching the Pydantic schemas.
+| Request | Used for | Status |
+|---|---|---|
+| `GET /api/v1/tasks?limit=500` | Tasks, task counts, WIP, exceptions, and which orders to show | Exists |
+| `GET /api/v1/orders/{id}` | One request per order, for the 14 newest order ids found in the tasks | Exists |
+| `GET /api/v1/events/metrics` | Throughput tile and the active exception | Not in the backend yet; the tile shows a dash |
+| `GET /api/v1/events/metrics/throughput?minutes=30` | Metrics page chart | Not in the backend yet; the chart says so |
 
-**Warehouse scoping:** inside the portal (`/w/[id]/...`) every request adds `?warehouse_id=<id>`. Without it the
-backend should return all warehouses, which is what the original `/console` page does.
+Orders and tasks are required: if either fails, the last good data stays on screen with an error. Metrics are
+optional: if they fail, everything else still updates. Every request times out after 8 seconds
+(`lib/api-client.ts`), so a hung call can't stop the polling.
 
-On-time % is calculated in the browser from `GET /orders` (completed orders with `completed_at <= due_at`, divided by
-completed orders), so it needs no new endpoint.
+## How `data.ts` maps the backend
 
-### `GET /orders` (Kanayo)
+| Backend | Board |
+|---|---|
+| `task_id`, `sku_code`, `qty` | `id`, `sku`, `quantity` |
+| `location` `{location_id, x, y, zone, aisle}` | `location` label like `"A3 (7,3)"` (the backend has no bin code); an order line split across bins lists each one |
+| `current_assignment.worker_id` | `worker_id` (`null` when unassigned) |
+| task `picked` (final state) | `complete` |
+| order `complete` | `complete` |
+| order `open` past `due_at` | `late` |
+| order `open` with any task past `open` | `in_progress` |
+| order `open`, all tasks `open` | `new` |
 
-Returns an array of orders, each with its lines.
+## Gaps for the backend
 
-```json
-[
-  {
-    "id": 1001,
-    "status": "in_progress",
-    "created_at": "2026-10-17T18:00:00Z",
-    "due_at": "2026-10-17T18:30:00Z",
-    "completed_at": null,
-    "lines": [
-      { "id": 1, "order_id": 1001, "sku": "SKU-1042", "quantity": 3, "location": "A-03-2" }
-    ]
-  }
-]
-```
-
-- `status`: `"new" | "in_progress" | "complete" | "late"`
-  - `new`: no task has started
-  - `in_progress`: at least one task is past `open`
-  - `complete`: every task is `complete`
-  - `late`: past `due_at` and not complete
-- `completed_at`: set when the order becomes `complete`, otherwise `null`
-
-### `GET /tasks` (Kanayo)
-
-Returns an array of pick tasks, one per order line.
-
-```json
-[
-  {
-    "id": 7,
-    "order_id": 1001,
-    "order_line_id": 1,
-    "sku": "SKU-1042",
-    "quantity": 3,
-    "location": "A-03-2",
-    "status": "assigned",
-    "worker_id": 4,
-    "exception_type": null,
-    "updated_at": "2026-10-17T18:04:12Z"
-  }
-]
-```
-
-- `status`: `"open" | "assigned" | "picked" | "complete" | "exception"`. `exception` is new; the shared
-  `TaskStatus` in `types/index.ts` needs it added.
-- `worker_id`: `null` while `open`
-- `exception_type`: `"stockout" | "worker_down"` when `status` is `"exception"`, otherwise `null`
-
-### `GET /events/metrics` (Kendyn)
-
-```json
-{
-  "units_per_hour": 312,
-  "tasks_per_hour": 104,
-  "orders_in_progress": 5,
-  "tasks_assigned": 4,
-  "task_counts": { "open": 6, "assigned": 4, "picked": 2, "complete": 18, "exception": 1 },
-  "active_exception": {
-    "task_id": 12,
-    "order_id": 1004,
-    "location": "C-07-1",
-    "type": "stockout",
-    "raised_at": "2026-10-17T18:05:40Z"
-  },
-  "as_of": "2026-10-17T18:06:00Z"
-}
-```
-
-- `units_per_hour` / `tasks_per_hour`: units and tasks completed over a recent window (the mock uses the last
-  5 minutes), scaled to an hourly rate
-- `orders_in_progress`: orders with status `in_progress` or `late`
-- `tasks_assigned`: tasks with status `assigned`. The board shows WIP as `orders_in_progress + tasks_assigned`
-- `task_counts`: include every status key, even when the count is 0
-- `active_exception`: the current unresolved exception, or `null`. `type` is `"stockout" | "worker_down"`.
-  The board also flags any task in `GET /tasks` with status `exception`, so either source works.
-
-### `GET /events/metrics/throughput?minutes=30` (Kendyn)
-
-Completions per minute, oldest first, one entry per minute even when nothing was completed. `bucket_start` is the
-start of the minute; the last bucket is the current, still-filling minute.
-
-```json
-[
-  { "bucket_start": "2026-10-17T18:00:00Z", "units": 41, "tasks": 14 },
-  { "bucket_start": "2026-10-17T18:01:00Z", "units": 37, "tasks": 12 }
-]
-```
-
-## TODO
-
-- Move `Order`, `OrderLine`, `Task`, `LiveMetrics` and `LiveTaskStatus` from `data.ts` into `types/index.ts`
-  after Kanayo reviews them.
+- **No order list.** A `GET /api/v1/orders?limit=14` (newest first) would replace the per-order requests.
+- **No metrics.** Throughput needs completions over time, e.g. `GET /api/v1/events/metrics` returning
+  `{units_per_hour, tasks_per_hour, active_exception, as_of}` and `/throughput` returning
+  `[{bucket_start, units, tasks}]` per minute, oldest first.
+- **No `completed_at` on orders**, so on-time % shows a dash with real data.
+- **No exception type on tasks**, so the banner shows a plain "Exception" for backend tasks.
+- **No `updated_at` in `TaskOut`.** The tasks table has the column; returning it would let the board show when
+  a task last changed. Until then the field is `null` with real data.
+- **Tasks are capped at 500 and sorted by priority, then oldest first.** Past 500 open tasks the newest ones
+  (and their orders) drop off, and task counts, WIP and exceptions come from a partial list. An order list
+  endpoint (above) plus a counts endpoint (tasks per status) would fix both.

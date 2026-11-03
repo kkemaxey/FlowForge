@@ -1,9 +1,8 @@
 import { PlaceholderPage } from "@/components/portal/Wireframe";
-import { warehouseOr404 } from "@/mocks/warehouses";
+import { DEMO_WAREHOUSE as warehouse } from "@/mocks/demoWarehouse";
 
-export default async function OrderDetailPage({ params }: PageProps<"/w/[id]/orders/[orderId]">) {
-  const { id, orderId } = await params;
-  const warehouse = warehouseOr404(id);
+export default async function OrderDetailPage({ params }: PageProps<"/orders/[orderId]">) {
+  const { orderId } = await params;
 
   return (
     <PlaceholderPage

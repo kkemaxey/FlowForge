@@ -5,6 +5,43 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-11-03
+
+Review fixes for the live board and portal (Jayden, 2026-11-03): one
+warehouse, the real `/api/v1` backend shapes, and a board that keeps working
+without the metrics endpoint.
+
+### Changed
+
+- Portal pages moved off `/w/[id]`: the console, metrics, exceptions and order
+  pages are now `/console`, `/metrics`, `/exceptions` and `/orders/[id]`, and
+  the admin pages are `/admin/layout`, `/admin/inventory`, `/admin/workforce`
+  and `/admin/simulation`. The side nav and the `/403` back link follow.
+- The console shows the `WorkforcePanel` (Trent) and `Controls` (Aalan)
+  components in place of their placeholder boxes.
+- `live-board/data.ts` calls `/api/v1` and maps the backend's shapes onto the
+  board's types: `{items, count}` task lists, `task_id` / `sku_code` / `qty`,
+  the `location` object, `current_assignment.worker_id`, task `picked` as
+  complete, and order `open` split into new, in progress or late.
+- The board loads orders from `GET /api/v1/orders/{id}` for the newest order
+  ids in the task list, since there is no order list endpoint yet.
+- `useLiveBoard` uses `Promise.allSettled`: metrics are optional, so a missing
+  metrics endpoint no longer hides orders and tasks. Task counts and WIP are
+  worked out from the tasks in `boardLogic.ts`.
+- API base URL defaults to `http://localhost:8080` in `lib/api-client.ts` and
+  `frontend/.env.example`.
+- `apiFetch` only attaches a Firebase token when Firebase is configured, so
+  real-data mode works before login is set up.
+- `live-board/README.md` now documents the real endpoints, the mapping and the
+  gaps for the backend.
+
+### Removed
+
+- The warehouse picker (`/warehouses`), `/admin/warehouses/new`, the
+  `?warehouse_id=` param, and the 5 × 5 and 60 × 40 test warehouses.
+- The old `/console` scaffold page and its Firebase sign-in gate; the portal
+  console replaces it. Sign-in is part of Brock's login work.
+
 ## [0.9.0] - 2026-11-03
 
 Auth module endpoints and the supervisor role, by Brock. Firebase proves

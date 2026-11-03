@@ -1,6 +1,9 @@
-import { getFirebaseAuth } from "@/lib/firebase";
+import { FIREBASE_CONFIGURED, getFirebaseAuth } from "@/lib/firebase";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
+// A request that hasn't answered by then is aborted, so one hung call can't stall the live board's polling.
+const TIMEOUT_MS = 8000;
 
 type ApiOptions = RequestInit & { auth?: boolean };
 
@@ -31,17 +34,20 @@ export class ApiRequestError extends Error {
   }
 }
 
-/** Fetch a backend path as JSON, attaching the signed-in user's Firebase token by default. */
+/**
+ * Fetch a backend path as JSON, attaching the signed-in user's Firebase token by default. Without Firebase
+ * config the request goes out with no token, so local development works before login is set up.
+ */
 export async function apiFetch<T>(path: string, { auth = true, ...init }: ApiOptions = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
 
-  if (auth) {
+  if (auth && FIREBASE_CONFIGURED) {
     const token = await getFirebaseAuth().currentUser?.getIdToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const response = await fetch(`${API_URL}${path}`, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS) });
   if (!response.ok) {
     // Error bodies are {"detail", "code"} JSON; anything else (e.g. a proxy's HTML page) is ignored.
     let body: { code?: string; detail?: string; errors?: ApiFieldError[] } | undefined;

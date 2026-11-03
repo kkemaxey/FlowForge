@@ -7,8 +7,8 @@ export default function NotAuthorizedPage() {
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         This page is part of Setup, which only admins can use. Ask an admin if you need access.
       </p>
-      <Link href="/warehouses" className="text-sm underline underline-offset-2">
-        Back to warehouses
+      <Link href="/console" className="text-sm underline underline-offset-2">
+        Back to the console
       </Link>
     </div>
   );

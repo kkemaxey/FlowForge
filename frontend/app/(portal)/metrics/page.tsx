@@ -1,14 +1,12 @@
 import { Annotation, PageHeader, PlaceholderBox } from "@/components/portal/Wireframe";
 import { ThroughputChart } from "@/app/console/live-board/ThroughputChart";
-import { warehouseOr404 } from "@/mocks/warehouses";
+import { DEMO_WAREHOUSE as warehouse } from "@/mocks/demoWarehouse";
 
-export default async function MetricsPage({ params }: PageProps<"/w/[id]/metrics">) {
-  const warehouse = warehouseOr404((await params).id);
-
+export default function MetricsPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Metrics" subtitle={warehouse.name} />
-      <ThroughputChart warehouseId={warehouse.id} />
+      <ThroughputChart />
       <PlaceholderBox label="Assigner comparison by sim run (later)">
         <div className="overflow-x-auto">
           <table className="mt-1 w-full min-w-md text-left text-xs">

@@ -1,9 +1,7 @@
 import { PlaceholderPage } from "@/components/portal/Wireframe";
-import { warehouseOr404 } from "@/mocks/warehouses";
+import { DEMO_WAREHOUSE as warehouse } from "@/mocks/demoWarehouse";
 
-export default async function LayoutEditorPage({ params }: PageProps<"/admin/w/[id]/layout">) {
-  const warehouse = warehouseOr404((await params).id);
-
+export default function LayoutEditorPage() {
   return (
     <PlaceholderPage
       title="Layout editor"
