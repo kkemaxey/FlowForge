@@ -5,6 +5,196 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-11-03
+
+Pick completion, exceptions, metrics and the worker simulator, by Kendyn,
+rebuilt on `main` by Kanayo.
+
+### Added
+
+- `POST /api/v1/tasks/{id}/pick`: removes the stock, closes the assignment,
+  frees the worker at the bin, and completes the order on its last pick.
+- `POST /api/v1/tasks/{id}/exceptions`: handles a `stockout`, `jam` or
+  `worker_down`. A stockout or jam moves the task to the nearest bin that can
+  cover it. A worker going down reopens the task in place. A task with no bin
+  to move to becomes `exception` and waits for the supervisor.
+- `GET /api/v1/exceptions`: newest first as `{items, count}`, filtered by
+  `open=true|false`.
+- `POST /api/v1/simulation/workers/{id}/recover`: brings a downed worker back
+  to idle.
+- `GET /api/v1/simulation/assignments/active`: what the simulator polls.
+- `GET /api/v1/events/metrics` and `GET /api/v1/events/metrics/throughput`, in
+  the shapes the live board expects.
+- The worker simulator, which only uses the HTTP API. Run it with
+  `python -m app.modules.simulation.cli run`, and force a failure with `trigger`.
+- Migration `0004`: `run_id`, `qty_found`, `from_location_id` and
+  `rerouted_to_location_id` on `exceptions`.
+
+### Changed
+
+- Reassigning a task stuck in `exception` now resolves its open exception.
+
+## [0.12.0] - 2026-11-03
+
+Location list endpoint for the warehouse grid, by Kanayo.
+
+### Added
+
+- `GET /api/v1/locations`: every location as `{items, count}`, sorted by `y`
+  then `x`. Each item has `location_id`, `x`, `y`, `kind`, `zone` and `aisle`.
+- `kind` in `LocationOut`, so it also appears on the `location` object in order
+  and task responses.
+
+## [0.11.0] - 2026-11-03
+
+Order list endpoint for the live board, by Kanayo.
+
+### Added
+
+- `GET /api/v1/orders`: orders newest first as `{items, count}`, with their
+  lines and tasks. `limit` defaults to 50, maximum 500.
+- `completed_at` in `OrderOut`, on every endpoint that returns an order.
+
+### Changed
+
+- Order responses are built in two queries however many orders are returned,
+  instead of two queries per order.
+
+## [0.10.0] - 2026-11-03
+
+Review fixes for the live board and portal (Jayden, 2026-11-03): one
+warehouse, the real `/api/v1` backend shapes, and a board that keeps working
+without the metrics endpoint.
+
+### Changed
+
+- Portal pages moved off `/w/[id]`: the console, metrics, exceptions and order
+  pages are now `/console`, `/metrics`, `/exceptions` and `/orders/[id]`, and
+  the admin pages are `/admin/layout`, `/admin/inventory`, `/admin/workforce`
+  and `/admin/simulation`. The side nav and the `/403` back link follow.
+- The console shows the `WorkforcePanel` (Trent) and `Controls` (Aalan)
+  components in place of their placeholder boxes.
+- `live-board/data.ts` calls `/api/v1` and maps the backend's shapes onto the
+  board's types: `{items, count}` task lists, `task_id` / `sku_code` / `qty`,
+  the `location` object, `current_assignment.worker_id`, task `picked` as
+  complete, and order `open` split into new, in progress or late.
+- The board loads orders from `GET /api/v1/orders/{id}` for the newest order
+  ids in the task list, since there is no order list endpoint yet.
+- `useLiveBoard` uses `Promise.allSettled`: metrics are optional, so a missing
+  metrics endpoint no longer hides orders and tasks. Task counts and WIP are
+  worked out from the tasks in `boardLogic.ts`.
+- API base URL defaults to `http://localhost:8080` in `lib/api-client.ts` and
+  `frontend/.env.example`.
+- `apiFetch` only attaches a Firebase token when Firebase is configured, so
+  real-data mode works before login is set up.
+- `live-board/README.md` now documents the real endpoints, the mapping and the
+  gaps for the backend.
+
+### Removed
+
+- The warehouse picker (`/warehouses`), `/admin/warehouses/new`, the
+  `?warehouse_id=` param, and the 5 × 5 and 60 × 40 test warehouses.
+- The old `/console` scaffold page and its Firebase sign-in gate; the portal
+  console replaces it. Sign-in is part of Brock's login work.
+
+## [0.9.0] - 2026-11-03
+
+Auth module endpoints and the supervisor role, by Brock. Firebase proves
+identity (verified by `core/security`); the `users` table maps a UID to an app
+role, and the supervisor gate lives in one dependency rather than spread across
+handlers. Built up over the sprint: the response schema and auth service
+(2026-10-14), the session and me endpoints (2026-10-27), and the shared
+supervisor gate other modules reuse (2026-11-02).
+
+### Added
+
+- `POST /auth/session`: verifies the Firebase token, provisions or syncs the
+  `users` row, and appends a `user_login` event to the events log (2026-10-27).
+- `GET /auth/me`: returns the current user with a derived `is_supervisor` flag,
+  and `404 not_provisioned` before the first session (2026-10-27).
+- `require_supervisor` dependency that other modules add to gate supervisor-only
+  writes; `current_app_user` resolves the caller's `users` row (2026-11-02).
+- `UserOut` response schema and the auth service (`provision_user`,
+  `get_user_by_uid`) (2026-10-14).
+- `tests/test_auth.py`: provision → read, the pre-session `404`, and the
+  unauthenticated `401`, all in the shared `{detail, code}` error shape.
+
+## [0.8.0] - 2026-11-03
+
+Workforce CRUD, by Trent. Supervisors can add, edit and deactivate pickers and
+robots through `/api/v1/workers`, with the same version checks and event
+writes as tasks and orders.
+
+### Added
+
+- `GET /api/v1/workers` (`status`, `kind`, `include_inactive=false`,
+  `limit` 1–500) returning `{items, count}` ordered by id; deactivated workers
+  are hidden unless `include_inactive=true`.
+- `GET /api/v1/workers/{worker_id}` (deactivated workers included); 404
+  `worker_not_found`.
+- `POST /api/v1/workers` (`{name, kind, x, y, speed?}`): 201 with a
+  `Location` header. New workers start `idle`, active, at version 0. Sending
+  `status`, `is_active` or `version` is a 422, as is a negative `x` or `y`.
+- `PATCH /api/v1/workers/{worker_id}` (`{expected_version, name?, kind?, x?,
+  y?, speed?}`): a compare-and-set on `workers.version` that applies only the
+  fields that differ. Returns 409 `version_conflict`, 409 `worker_busy`
+  (moving a busy worker), 409 `worker_inactive`, or 422 for an explicit
+  `null`. Sending no changes checks the version and returns the worker as is.
+  `status` is not editable; it belongs to the assigner and simulator.
+- `DELETE /api/v1/workers/{worker_id}`: soft delete (`is_active=false`,
+  `status=offline`, version bumped), 204. Returns 409
+  `worker_has_open_assignment` while the worker has an open assignment;
+  deleting an already deactivated worker is a no-op 204.
+- `worker_created`, `worker_updated` (`{"changes": {...}}`) and
+  `worker_deactivated` events, written in the same transaction as the change.
+- `list_idle_workers()` and `get_worker()` in `workforce/service.py` for other
+  modules.
+- Migration `0003`: `workers.version` (default 0) and `workers.updated_at`
+  (existing rows get the migration time).
+- `tests/test_workforce_api.py` and `tests/test_workforce_service.py`
+  (51 tests).
+- Workforce panel on `/console` (`frontend/app/console/workforce/`): worker
+  table with a "Show deactivated" toggle, add/edit form with field-level
+  validation messages, and deactivate with an inline confirm. Works against
+  `/api/v1/workers` or an in-browser mock with the same rules
+  (`NEXT_PUBLIC_USE_MOCKS`).
+- Request logging (`core/request_logging.py`, registered in `main.py`): one
+  `request received` line and one `request completed` line (status, duration)
+  per request on the `uvicorn.error` logger, tied together by a request id
+  that is taken from `X-Request-ID` or generated, and echoed back. Bodies and
+  query strings are never logged. Tests in `tests/test_request_logging.py`.
+
+### Changed
+
+- The workforce router moved from the `/workforce` placeholder to
+  `/api/v1/workers`.
+- Root `.gitignore` now ignores `.env`, `.venv/` and `.coverage`.
+- `frontend/lib/api-client.ts`: `apiFetch` returns `undefined` for a 204 and
+  throws `ApiRequestError` (`status`, `code`, `detail`, `errors`) on errors;
+  the error message is unchanged. `WorkerStatus` now includes `down` and
+  `offline`.
+- CI: the backend job now starts MySQL 8.0 (with `docker-compose.yml`'s server
+  flags and a random per-run password) and sets `TEST_DATABASE_URL`, so the
+  database tests run instead of being skipped. Before this, CI was green while
+  running 12 of the 180 backend tests. A new `docker` job builds
+  `backend/Dockerfile`.
+
+### Known issues
+
+- Auth is not applied to these endpoints yet (MVP-wide).
+- Positions have no upper bound: nothing in the schema records the warehouse's
+  size (`locations` has only bins and stations, so its largest `x`/`y` misses
+  walkway column 9 and the robots' row 9). Proposed: `WAREHOUSE_WIDTH` and
+  `WAREHOUSE_HEIGHT` settings (default 10 × 10) and a 422 `position_off_grid`
+  check, to agree with Kanayo since it touches `core/config.py`.
+- The assigner's worker status changes (idle ↔ busy) don't bump
+  `workers.version` yet, so a client's `expected_version` doesn't notice them.
+  PATCH and DELETE lock the worker row, so they still see the current status.
+- The database documentation lists a `kind` picker type and a default status
+  of `offline`; the code uses `human`/`robot` and `idle`.
+- The event-type allowlist will need `worker_created`, `worker_updated` and
+  `worker_deactivated`.
+
 ## [0.7.0] - 2026-11-03
 
 Supervisor live board, warehouse grid and portal wireframes, by Jayden.

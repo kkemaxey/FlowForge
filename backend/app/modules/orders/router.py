@@ -1,11 +1,20 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.modules.orders import service
-from app.modules.orders.schemas import OrderCreate, OrderOut
+from app.modules.orders.schemas import OrderCreate, OrderListOut, OrderOut
 
 router = APIRouter(prefix="/api/v1/orders", tags=["orders"])
+
+
+@router.get("", response_model=OrderListOut)
+def list_orders(
+    limit: int = Query(default=50, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> OrderListOut:
+    """Orders, newest first, with their lines and tasks."""
+    return service.list_orders(db, limit)
 
 
 @router.post(

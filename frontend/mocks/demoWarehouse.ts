@@ -130,3 +130,6 @@ export function buildDemoWarehouse(id: number): Warehouse {
   }
   return { id, name: "Main DC (10 × 10 demo)", width: DEMO_WIDTH, height: DEMO_HEIGHT, cell_size_m: 1, cells, locations };
 }
+
+/** The one warehouse the backend serves (there is no warehouses table). */
+export const DEMO_WAREHOUSE: Warehouse = buildDemoWarehouse(1);

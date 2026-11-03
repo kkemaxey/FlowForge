@@ -13,7 +13,7 @@ import {
   type OrderStatus,
   type Task,
 } from "./data";
-import { collectExceptions, sortNewestFirst } from "./boardLogic";
+import { collectExceptions, countTasksByStatus, sortNewestFirst } from "./boardLogic";
 import { KpiStrip } from "./KpiStrip";
 import { useLiveBoard } from "./useLiveBoard";
 
@@ -39,15 +39,16 @@ const TASK_STATUSES: { status: LiveTaskStatus; label: string; className: string 
 
 const EXCEPTION_LABEL: Record<ExceptionType, string> = {
   stockout: "Stockout",
+  jam: "Jam",
   worker_down: "Worker down",
+  unknown: "Exception",
 };
 
-const formatTime = (value: string | Date) =>
-  new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+const formatTime = (value: string | Date | null) =>
+  value === null ? "—" : new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
 
-// warehouseId scopes the board to one site; leave it out to show everything.
-export function LiveBoard({ warehouseId }: { warehouseId?: number }) {
-  const { data, error, loading } = useLiveBoard(2000, warehouseId);
+export function LiveBoard() {
+  const { data, error, loading } = useLiveBoard(2000);
 
   return (
     <Card title="Live board">
@@ -58,9 +59,9 @@ export function LiveBoard({ warehouseId }: { warehouseId?: number }) {
         {data && (
           <>
             <ExceptionBanner tasks={data.tasks} metrics={data.metrics} />
-            <KpiStrip metrics={data.metrics} orders={data.orders} />
-            <TaskSummary counts={data.metrics.task_counts} />
-            <OrdersTable orders={data.orders} warehouseId={warehouseId} />
+            <KpiStrip metrics={data.metrics} orders={data.orders} tasks={data.tasks} />
+            <TaskSummary counts={countTasksByStatus(data.tasks)} />
+            <OrdersTable orders={data.orders} />
           </>
         )}
       </div>
@@ -84,7 +85,7 @@ function StatusLine({ updatedAt, error }: { updatedAt?: Date; error: Error | nul
 
 // Red alert listing every task in exception. The grid map (Aalan) handles showing it on the map;
 // this only flags it on the live board.
-function ExceptionBanner({ tasks, metrics }: { tasks: Task[]; metrics: LiveMetrics }) {
+function ExceptionBanner({ tasks, metrics }: { tasks: Task[]; metrics: LiveMetrics | null }) {
   const alerts = collectExceptions(tasks, metrics);
   if (alerts.length === 0) return null;
 
@@ -107,7 +108,7 @@ function ExceptionBanner({ tasks, metrics }: { tasks: Task[]; metrics: LiveMetri
   );
 }
 
-// How many tasks are in each status right now, from the metrics endpoint.
+// How many tasks are in each status right now.
 function TaskSummary({ counts }: { counts: Record<LiveTaskStatus, number> }) {
   return (
     <div>
@@ -124,9 +125,9 @@ function TaskSummary({ counts }: { counts: Record<LiveTaskStatus, number> }) {
   );
 }
 
-// Orders table, newest first. Late orders get a red row and red due time. Inside a warehouse, each order
-// number links to its detail page.
-function OrdersTable({ orders, warehouseId }: { orders: Order[]; warehouseId?: number }) {
+// Orders table, newest first. Late orders get a red row and red due time. Each order number links to its
+// detail page.
+function OrdersTable({ orders }: { orders: Order[] }) {
   const sorted = sortNewestFirst(orders);
 
   return (
@@ -152,13 +153,9 @@ function OrdersTable({ orders, warehouseId }: { orders: Order[]; warehouseId?: n
                 return (
                   <tr key={order.id} className={late ? "bg-red-50 dark:bg-red-950/40" : undefined}>
                     <td className="px-3 py-2 font-mono text-zinc-900 dark:text-zinc-100">
-                      {warehouseId === undefined ? (
-                        `#${order.id}`
-                      ) : (
-                        <Link href={`/w/${warehouseId}/orders/${order.id}`} className="underline underline-offset-2">
-                          #{order.id}
-                        </Link>
-                      )}
+                      <Link href={`/orders/${order.id}`} className="underline underline-offset-2">
+                        #{order.id}
+                      </Link>
                     </td>
                     <td className="px-3 py-2">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ORDER_BADGE[order.status]}`}>

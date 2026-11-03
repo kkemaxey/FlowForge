@@ -1,4 +1,4 @@
-import type { ExceptionType, LiveMetrics, Order, Task, ThroughputBucket } from "./data";
+import type { ExceptionType, LiveMetrics, LiveTaskStatus, Order, Task, ThroughputBucket } from "./data";
 
 // The live board's calculations, kept apart from the UI in LiveBoard.tsx (per the course engineering
 // standards: logic lives in its own layer, and the components only display the results). These are
@@ -16,7 +16,7 @@ export interface ExceptionAlert {
  * Combines tasks whose status is "exception" with the metrics endpoint's active_exception, so the
  * banner works whichever source the backend fills in first.
  */
-export function collectExceptions(tasks: Task[], metrics: LiveMetrics): ExceptionAlert[] {
+export function collectExceptions(tasks: Task[], metrics: LiveMetrics | null): ExceptionAlert[] {
   const alerts = new Map<number, ExceptionAlert>();
   for (const task of tasks) {
     if (task.status === "exception") {
@@ -24,11 +24,11 @@ export function collectExceptions(tasks: Task[], metrics: LiveMetrics): Exceptio
         taskId: task.id,
         orderId: task.order_id,
         location: task.location,
-        type: task.exception_type ?? "stockout",
+        type: task.exception_type ?? "unknown",
       });
     }
   }
-  const active = metrics.active_exception;
+  const active = metrics?.active_exception;
   if (active && !alerts.has(active.task_id)) {
     alerts.set(active.task_id, {
       taskId: active.task_id,
@@ -40,9 +40,27 @@ export function collectExceptions(tasks: Task[], metrics: LiveMetrics): Exceptio
   return [...alerts.values()];
 }
 
-/** WIP (work in progress) = orders being worked on + tasks handed to workers but not yet picked. */
-export function wipTotal(metrics: LiveMetrics): number {
-  return metrics.orders_in_progress + metrics.tasks_assigned;
+/** How many tasks are in each status right now. */
+export function countTasksByStatus(tasks: Task[]): Record<LiveTaskStatus, number> {
+  const counts: Record<LiveTaskStatus, number> = { open: 0, assigned: 0, picked: 0, complete: 0, exception: 0 };
+  for (const task of tasks) counts[task.status]++;
+  return counts;
+}
+
+export interface Wip {
+  total: number;
+  ordersInProgress: number;
+  tasksAssigned: number;
+}
+
+/**
+ * WIP (work in progress) = orders being worked on (in progress, or late and not yet complete) + tasks handed
+ * to workers but not yet picked.
+ */
+export function workInProgress(orders: Order[], tasks: Task[]): Wip {
+  const ordersInProgress = orders.filter((o) => o.status === "in_progress" || o.status === "late").length;
+  const tasksAssigned = tasks.filter((t) => t.status === "assigned").length;
+  return { total: ordersInProgress + tasksAssigned, ordersInProgress, tasksAssigned };
 }
 
 /** Orders sorted newest first. Returns a new array so the polled data is never mutated. */
@@ -57,7 +75,8 @@ export function sortNewestFirst(orders: Order[]): Order[] {
 export function onTimeRate(orders: Order[]): number | null {
   const completed = orders.filter((o) => o.status === "complete" && o.completed_at !== null);
   if (completed.length === 0) return null;
-  const onTime = completed.filter((o) => Date.parse(o.completed_at!) <= Date.parse(o.due_at)).length;
+  // An order with no due time can't be late, so it counts as on time.
+  const onTime = completed.filter((o) => o.due_at === null || Date.parse(o.completed_at!) <= Date.parse(o.due_at)).length;
   return Math.round((onTime / completed.length) * 100);
 }
 

@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.errors import register_error_handlers
+from app.core.request_logging import register_request_logging
 from app.modules.assignment.loop import assigner_loop
 from app.modules.assignment.router import router as assignment_router
 from app.modules.auth.router import router as auth_router
@@ -17,12 +18,14 @@ from app.modules.generator.service import generator
 from app.modules.orders.router import router as orders_router
 from app.modules.simulation.router import router as simulation_router
 from app.modules.tasks.router import router as tasks_router
+from app.modules.warehouse.router import router as warehouse_router
 from app.modules.workforce.router import router as workforce_router
 
 ROUTERS = [
     auth_router,
     orders_router,
     tasks_router,
+    warehouse_router,
     assignment_router,
     simulation_router,
     workforce_router,
@@ -57,6 +60,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Added last so it wraps everything else, including CORS preflight responses.
+    register_request_logging(app)
 
     @app.get("/health", tags=["ops"])
     def health() -> dict[str, str]:

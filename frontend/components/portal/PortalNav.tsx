@@ -11,30 +11,26 @@ interface NavItem {
 }
 
 // Side navigation shared by every portal page. Supervisors and admins see the same links, and admins also
-// get the Setup section. Per-warehouse links follow whichever warehouse is open (warehouse 1 by default).
-export function PortalNav({ role, warehouses }: { role: Role; warehouses: { id: number; name: string }[] }) {
+// get the Setup section. There is one warehouse, so its name heads the list.
+export function PortalNav({ role, warehouseName }: { role: Role; warehouseName: string }) {
   const pathname = usePathname();
-  const match = pathname.match(/^\/(?:admin\/)?w\/(\d+)/);
-  const current = warehouses.find((w) => w.id === Number(match?.[1])) ?? warehouses[0];
 
   const site: NavItem[] = [
-    { href: `/w/${current.id}/console`, label: "Console" },
-    { href: `/w/${current.id}/exceptions`, label: "Exceptions" },
-    { href: `/w/${current.id}/metrics`, label: "Metrics" },
+    { href: "/console", label: "Console" },
+    { href: "/exceptions", label: "Exceptions" },
+    { href: "/metrics", label: "Metrics" },
   ];
   const setup: NavItem[] = [
-    { href: "/admin/warehouses/new", label: "New warehouse" },
-    { href: `/admin/w/${current.id}/layout`, label: "Layout editor" },
-    { href: `/admin/w/${current.id}/inventory`, label: "SKUs & inventory" },
-    { href: `/admin/w/${current.id}/workforce`, label: "Workforce" },
-    { href: `/admin/w/${current.id}/simulation`, label: "Simulation" },
+    { href: "/admin/layout", label: "Layout editor" },
+    { href: "/admin/inventory", label: "SKUs & inventory" },
+    { href: "/admin/workforce", label: "Workforce" },
+    { href: "/admin/simulation", label: "Simulation" },
     { href: "/admin/users", label: "Users & roles" },
   ];
 
   return (
     <nav aria-label="Portal" className="flex flex-col gap-5 text-sm">
-      <NavSection items={[{ href: "/warehouses", label: "All warehouses" }]} pathname={pathname} />
-      <NavSection title={current.name} items={site} pathname={pathname} />
+      <NavSection title={warehouseName} items={site} pathname={pathname} />
       {role === "admin" && <NavSection title="Setup" items={setup} pathname={pathname} />}
     </nav>
   );

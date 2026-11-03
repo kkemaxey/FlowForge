@@ -21,7 +21,7 @@ const PAD = { top: 10, right: 8, bottom: 22, left: 32 };
 
 const formatMinute = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-export function ThroughputChart({ warehouseId }: { warehouseId: number }) {
+export function ThroughputChart() {
   const [buckets, setBuckets] = useState<ThroughputBucket[] | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
@@ -29,7 +29,7 @@ export function ThroughputChart({ warehouseId }: { warehouseId: number }) {
     let cancelled = false;
     async function load() {
       try {
-        const next = await getThroughput(warehouseId, MINUTES);
+        const next = await getThroughput(MINUTES);
         if (!cancelled) {
           setBuckets(next);
           setError(null);
@@ -44,12 +44,16 @@ export function ThroughputChart({ warehouseId }: { warehouseId: number }) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [warehouseId]);
+  }, []);
 
   return (
     <Card title={`Throughput · last ${MINUTES} minutes`}>
       {!buckets && !error && <p className="text-sm text-zinc-500">Loading throughput…</p>}
-      {!buckets && error && <p className="text-sm text-zinc-700 dark:text-zinc-300">Couldn&apos;t load throughput.</p>}
+      {!buckets && error && (
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
+          Couldn&apos;t load throughput. The chart needs a throughput endpoint, which the backend doesn&apos;t have yet.
+        </p>
+      )}
       {buckets && <ChartBody buckets={buckets} />}
     </Card>
   );
