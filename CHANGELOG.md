@@ -44,6 +44,11 @@ writes as tasks and orders.
   validation messages, and deactivate with an inline confirm. Works against
   `/api/v1/workers` or an in-browser mock with the same rules
   (`NEXT_PUBLIC_USE_MOCKS`).
+- Request logging (`core/request_logging.py`, registered in `main.py`): one
+  `request received` line and one `request completed` line (status, duration)
+  per request on the `uvicorn.error` logger, tied together by a request id
+  that is taken from `X-Request-ID` or generated, and echoed back. Bodies and
+  query strings are never logged. Tests in `tests/test_request_logging.py`.
 
 ### Changed
 
@@ -54,6 +59,11 @@ writes as tasks and orders.
   throws `ApiRequestError` (`status`, `code`, `detail`, `errors`) on errors;
   the error message is unchanged. `WorkerStatus` now includes `down` and
   `offline`.
+- CI: the backend job now starts MySQL 8.0 (with `docker-compose.yml`'s server
+  flags and a random per-run password) and sets `TEST_DATABASE_URL`, so the
+  database tests run instead of being skipped. Before this, CI was green while
+  running 12 of the 180 backend tests. A new `docker` job builds
+  `backend/Dockerfile`.
 
 ### Known issues
 
