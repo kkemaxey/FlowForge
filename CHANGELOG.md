@@ -5,12 +5,13 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-11-03
 
-Live board for Sprint 1 and Sprint 2 (Jayden), built on mock data until the
-orders, tasks and events endpoints exist, then reviewed against the course
-Engineering Standards (2026-10-17). Then the portal wireframes, warehouse grid
-and the backend's 10 × 10 demo warehouse (2026-11-02).
+Supervisor live board, warehouse grid and portal wireframes, by Jayden.
+Built on mock data until the orders, tasks and events endpoints exist, then
+reviewed against the course Engineering Standards (2026-10-17). Then the portal
+wireframes, warehouse grid and the backend's 10 × 10 demo warehouse
+(2026-11-02).
 
 ### Added
 
@@ -73,10 +74,210 @@ and the backend's 10 × 10 demo warehouse (2026-11-02).
   for the shared `types/index.ts`; the shared `TaskStatus` has no `exception`
   value yet.
 
+## [0.6.0] - 2026-11-02
+
+Supervisor overrides and the order generator, by Kanayo: reassign, expedite,
+and a seeded order stream that runs inside the backend.
+
+### Added
+
+- `POST /api/v1/tasks/{task_id}/reassign` (`{worker_id, expected_version,
+  reason?}`), in one transaction: version check through `transition()`, claim
+  the idle target worker, close any previous open assignment (outcome
+  `reassigned`), open a new `source=supervisor` assignment, and write
+  `task_reassigned` (or `task_assigned` if there was no previous assignment).
+  Also assigns `open` and `exception` tasks directly.
+- Reassign errors: 409 `worker_unavailable` when the target isn't idle and
+  active, and 409 `assignment_conflict` on a unique-key race.
+- `POST /api/v1/orders/{order_id}/expedite`: sets `expedited=true`, raises the
+  order and its unfinished tasks to priority 110 (`EXPEDITE_PRIORITY`), and
+  writes an `order_expedited` event. The order update is a compare-and-set on
+  `orders.version`. Returns 409 `order_complete` / `version_conflict`, or 404;
+  expediting twice is a no-op 200.
+- `generator` module (`app/modules/generator/`) with `GET /api/v1/generator`,
+  `POST /api/v1/generator/start` and `POST /api/v1/generator/stop`:
+  - `OrderStream`: seeded random orders (1–3 shoes, 1–3 pairs each, priority 0,
+    due in 30 min) at random gaps averaging `order_rate`; the same seed gives
+    the same stream.
+  - Each start creates a new `sim_runs` row; `stop()` sets its `ended_at`, and
+    the app's shutdown calls it.
+  - Orders go through the same intake code as `POST /orders`. Rejected orders
+    are counted, shoes with 0 unreserved pairs are tracked as out of stock, and
+    a 5 s check drops them once they are restocked.
+  - Returns 409 `generator_running` / `no_skus`.
+- `InsufficientStock` error (subclass of `ApiError`, carries `sku_code` and
+  `available`) so the generator can tell intake rejections apart. The HTTP
+  response is unchanged.
+- Tests: `test_reassign.py`, `test_expedite.py` and `test_generator.py`
+  (50 tests). 129 tests now pass against MySQL.
+
+### Changed
+
+- The small-warehouse test helper (`floor`) moved to `tests/conftest.py` so the
+  assigner, reassign and expedite tests share it.
+- `main.py` registers the generator router and stops the generator on shutdown.
+
+### Known issues
+
+- Expedite does not change who gets assigned in `greedy_v1`: a nearer normal
+  task still beats a far expedited one. This is intentional for the MVP and is
+  covered by a test.
+- Expedite raises priority on all unfinished tasks, not only `open` ones as the
+  spec says; waiting on confirmation.
+- Workers stay busy after one task each until pick completion is built.
+
+## [0.5.0] - 2026-10-29
+
+Greedy assigner with a background loop, and one error format for every route,
+by Kanayo.
+
+### Added
+
+- `POST /api/v1/assignments/run`: plans in memory (each idle, active worker
+  takes the nearest open task by Manhattan distance, ties to the oldest task),
+  then writes each pairing in its own transaction (task `open` → `assigned`,
+  worker `idle` → `busy`, an assignments row with `source=scheduler`,
+  `algorithm` and `score`, and a `task_assigned` event). Returns
+  `{algorithm, assignments, conflicts}`, or 422 `unknown_algorithm` /
+  `unknown_run`.
+- `ALGORITHMS` registry in `assignment/service.py`, starting with `greedy_v1`.
+- Background assigner loop (`assignment/loop.py`): one pass every
+  `ASSIGNER_INTERVAL_SECONDS` (default 2) in a worker thread; logs and
+  continues if a pass crashes, and stops cleanly on shutdown.
+- `ASSIGNER_LOOP_ENABLED` and `ASSIGNER_INTERVAL_SECONDS` settings in
+  `core/config.py`; Docker Compose turns the loop on.
+- Error handlers in `core/errors.py` for framework errors, all in the
+  `{detail, code}` shape: 404 `not_found`, 405 `method_not_allowed` (keeps the
+  `Allow` header), 500 `internal_error`, 401 `unauthorized`, 403 `forbidden`
+  and `http_error` for any other `HTTPException`.
+- Tests: `test_assignment.py` (26 tests, including conflicts injected between
+  the plan and write steps) and `test_errors.py` (4 tests).
+
+### Changed
+
+- `tests/conftest.py` forces the assigner loop off so it can't race the tests.
+- `backend/.env.example` adds the assigner interval.
+
+### Security
+
+- 500 responses only say "Internal server error"; the full trace goes to the
+  backend log, and a test checks that nothing leaks.
+
+### Known issues
+
+- The loop assumes a single backend instance. More instances are still safe,
+  but waste passes on conflicts.
+
+## [0.4.0] - 2026-10-21
+
+Order intake and the task state machine, by Kanayo.
+
+### Added
+
+- `POST /api/v1/orders`: in one transaction, saves the order and lines, creates
+  tasks (one bin if it covers the line, otherwise split across bins, largest
+  unreserved stock first), raises `qty_reserved` under `SELECT ... FOR UPDATE`,
+  and writes `order_received` and `task_created` events.
+  - A repeated `external_ref` returns 200 with the stored order and writes
+    nothing, including when two identical requests race.
+  - 422 `unknown_sku` / `unknown_run`, 409 `insufficient_stock`; any failure
+    rolls back every line.
+  - `priority` is limited to 0–100.
+- `GET /api/v1/orders/{id}`: the order with its lines, tasks and bin locations.
+- `GET /api/v1/tasks?status=&limit=`: highest priority first, then oldest, then
+  task id. Each item includes `current_assignment` or `null`. `limit` is 1–500,
+  default 50.
+- `transition()` in `tasks/service.py`: every task status change is a
+  compare-and-set on `status` and `version`. Raises 409 `version_conflict`
+  when another writer got there first, and 409 `invalid_transition` for moves
+  outside the allowed table (`open` → `assigned` → `picked`, plus reassign,
+  requeue and exception moves). It doesn't commit or write events; the caller
+  does both.
+- `core/errors.py`: `ApiError` and handlers so errors are `{"detail", "code"}`.
+- `core/schemas.py`: `UtcDatetime`, which outputs UTC like
+  `2026-10-20T14:02:11.204Z`.
+- Tests: `test_orders.py` (17 tests) and `test_tasks.py` (31 tests, including a
+  real two-session race and a test that pins the transition table).
+
+### Changed
+
+- Tests run against the `flowforge_test` MySQL database instead of SQLite.
+  `conftest.py` migrates it once per run and empties it before each test;
+  database tests skip when MySQL isn't available.
+- `utcnow()` in `core/database.py` drops anything finer than a millisecond, so
+  API timestamps match what MySQL stores.
+- `LocationOut` moved to `warehouse/schemas.py` and is shared by the orders and
+  tasks responses.
+
+### Fixed
+
+- A test helper treated `lines=[]` as "not given", so one order test passed
+  when it should have failed.
+- The suite took 30 s because `TRUNCATE` rebuilds each table; it now uses
+  `DELETE` (and `TRUNCATE` only for `events`) and takes about 5 s.
+
+### Known issues
+
+- Insufficient stock at intake is still an open team decision: reject with 409
+  (built now, marked `TODO(team decision)` in `_allocate`) or accept and open an
+  exception.
+- `count` in `GET /tasks` is the number of items returned; whether it should be
+  the total matching tasks is undecided.
+
+## [0.3.0] - 2026-10-14
+
+Local Docker stack, the full database schema and a seeded shoe warehouse, by
+Kanayo.
+
+### Added
+
+- `docker-compose.yml` with a `db` service (`mysql:8.0`, utf8mb4, strict SQL
+  mode, UTC, a `db_data` volume and a healthcheck) and a `backend` service
+  (built from `backend/Dockerfile`, code mounted with `--reload`, port 8080).
+- `docker/mysql/init/01-test-database.sh`, which creates the `flowforge_test`
+  database on first start.
+- `warehouse` module with the `locations`, `skus` and `inventory` models.
+- Base models for teammates' tables in their own modules: `workers`
+  (`workforce/`), `events` (`events/`), `users` (`auth/`), and `sim_runs` and
+  `exceptions` (`simulation/`).
+- Migration `0002_core_schema.py` for all 12 tables, including:
+  - one open assignment per task and per worker (generated columns
+    `active_task_id` / `active_worker_id` with unique keys)
+  - `version` columns on `tasks` and `orders` for compare-and-set
+  - append-only `events` triggers (`events_no_update`, `events_no_delete`)
+- Seed script `app/seed.py` (`python -m app.seed`, fixed seed 480): a 10×10
+  warehouse with 48 storage bins and 2 pick stations, 20 shoe SKUs (three kept
+  thin so orders split across bins), 5 humans, 5 robots, a placeholder
+  supervisor and a `greedy_v1` sim run. It refuses to run if data exists.
+
+### Changed
+
+- `backend/.env.example` points at the Docker MySQL and the test database
+  instead of SQLite / Cloud SQL.
+- `alembic/env.py` imports the warehouse models.
+- Order statuses are `open` / `complete` and task statuses are `open` /
+  `assigned` / `picked` / `exception`, matching the spec; `travel_cost` is now
+  `score` and `received_at` is now `created_at`.
+- `version` starts at 0 and is only changed by explicit compare-and-set
+  updates, replacing SQLAlchemy's `version_id_col`.
+
+### Fixed
+
+- The backend couldn't connect on MySQL's first start because the healthcheck
+  passed during setup; it now pings `127.0.0.1` over TCP.
+- `CREATE TRIGGER` failed with error 1419 because of binary logging; compose now
+  runs MySQL with `--skip-log-bin`.
+
+### Known issues
+
+- The design doc, `ARCHITECTURE.md` and `SPRINT_PLAN.md` still describe Cloud
+  Run and Cloud SQL.
+- Auth is off; all endpoints are open for the MVP.
+
 ## [0.2.0] - 2026-09-30
 
-Sprint 0 foundation filled in: a runnable backend and frontend skeleton, CI
-and deploy files.
+Sprint 0 foundation filled in, by Kanayo: a runnable backend and frontend
+skeleton, CI and deploy files.
 
 ### Added
 
@@ -136,7 +337,7 @@ and deploy files.
 
 ## [0.1.0] - 2026-09-17
 
-Sprint 0 foundation: monorepo skeleton in the feature-folder layout.
+Sprint 0 foundation, by Kanayo: monorepo skeleton in the feature-folder layout.
 
 ### Added
 
@@ -171,7 +372,7 @@ Sprint 0 foundation: monorepo skeleton in the feature-folder layout.
 
 ## [0.0.1] - 2026-09-13
 
-Initial "running server with one endpoint" assignment.
+Initial "running server with one endpoint" assignment, by Kanayo.
 
 ### Added
 

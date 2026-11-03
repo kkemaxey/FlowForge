@@ -15,6 +15,9 @@ class Settings:
             if origin.strip()
         ]
         self.firebase_credentials: str = os.getenv("FIREBASE_CREDENTIALS", "")
+        # Background assigner pass. Off unless enabled; docker-compose.yml turns it on.
+        self.assigner_loop_enabled: bool = os.getenv("ASSIGNER_LOOP_ENABLED", "false").lower() in ("1", "true", "yes")
+        self.assigner_interval_seconds: float = float(os.getenv("ASSIGNER_INTERVAL_SECONDS", "2"))
 
 
 settings = Settings()
