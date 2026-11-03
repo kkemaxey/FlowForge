@@ -2,7 +2,7 @@
 from collections.abc import Generator
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, create_engine
+from sqlalchemy import BigInteger, DateTime, Integer, SmallInteger, create_engine
 from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -13,12 +13,19 @@ class Base(DeclarativeBase):
     pass
 
 
-# DATETIME(3) on MySQL, plain DateTime elsewhere. Values are stored as naive UTC.
-Timestamp = DateTime().with_variant(mysql.DATETIME(fsp=3), "mysql")
+# Column types that render as the MySQL schema wants but still work on SQLite (tests, local dev).
+# SQLite only auto-increments INTEGER primary keys, so BIGINT ids fall back to INTEGER there.
+BigId = BigInteger().with_variant(Integer(), "sqlite")
+UnsignedInt = Integer().with_variant(mysql.INTEGER(unsigned=True), "mysql")
+TinyInt = SmallInteger().with_variant(mysql.TINYINT(), "mysql")
+Timestamp3 = DateTime().with_variant(mysql.DATETIME(fsp=3), "mysql")
 
 
 def utcnow() -> datetime:
-    """Naive UTC now, truncated to milliseconds to match DATETIME(3)."""
+    """Naive UTC timestamp at millisecond precision; all DATETIME(3) columns store UTC.
+
+    Cut to milliseconds so the value in memory matches what MySQL stores.
+    """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     return now.replace(microsecond=now.microsecond // 1000 * 1000)
 

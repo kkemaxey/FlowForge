@@ -1,45 +1,54 @@
 // Shared types that mirror the backend schemas. Add Order, Task and Worker here in Sprint 1.
-// Timestamps are UTC ISO 8601 strings with milliseconds, e.g. "2026-11-02T14:03:07.123Z".
 
-export type TaskStatus = "open" | "assigned" | "picked" | "complete" | "exception";
+export type TaskStatus = "open" | "assigned" | "picked" | "complete";
 
-export type WorkerStatus = "idle" | "busy" | "down";
+export type WorkerStatus = "idle" | "busy" | "down" | "offline";
 
-export type ApiErrorBody = { detail: string; code: string };
+export type WorkerKind = "human" | "robot";
 
-// modules/simulation/schemas.py
-export type ExceptionType = "stockout" | "jam" | "worker_down";
+// WorkerOut from /api/v1/workers. Deactivated workers have is_active false and status "offline".
+// version is the compare-and-set counter PATCH sends back as expected_version.
+export interface Worker {
+  worker_id: number;
+  name: string;
+  kind: WorkerKind;
+  status: WorkerStatus;
+  x: number;
+  y: number;
+  speed: number;
+  is_active: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
 
-export type ExceptionCreate = { type: ExceptionType; assignment_id: number; qty_found?: number };
+// GET /api/v1/workers response.
+export interface WorkerList {
+  items: Worker[];
+  count: number;
+}
 
-export type ExceptionOut = {
-  exception_id: number;
-  type: ExceptionType;
-  task_id: number;
-  opened_at: string;
-  task_status: TaskStatus;
-  rerouted_to_location_id: number | null;
-};
+// users.role. "supervisor" matches the course spec; "admin" adds the Setup pages.
+export type Role = "admin" | "supervisor";
 
-export type OpenException = {
-  exception_id: number;
-  type: ExceptionType;
-  task_id: number;
-  order_id: number;
-  assignment_id: number;
-  qty_found: number | null;
-  from_location_id: number;
-  rerouted_to_location_id: number | null;
-  task_status: TaskStatus;
-  opened_at: string;
-  resolved_at: string | null;
-};
+// What a grid cell is used for. Only "storage" cells hold a location (at most one per cell).
+// MVP travel time uses Manhattan distance and ignores cell types; pathfinding can use them later.
+export type CellType = "storage" | "aisle" | "station" | "blocked";
 
-// modules/events/schemas.py
-export type Throughput = {
-  run_id: number;
-  window_minutes: number;
-  picks: number;
-  picks_per_min: number;
-  as_of: string;
-};
+// A storage slot, e.g. "A1-03". Codes are unique per warehouse, and (warehouse_id, x, y) is unique.
+export interface WarehouseLocation {
+  code: string;
+  x: number;
+  y: number;
+}
+
+// warehouses row. cells is the layout JSON column: row-major, so cell (x, y) is cells[y * width + x].
+export interface Warehouse {
+  id: number;
+  name: string;
+  width: number; // 5 to 60 cells
+  height: number; // 5 to 40 cells
+  cell_size_m: number; // real-world size of one cell; 1.0 for MVP
+  cells: CellType[];
+  locations: WarehouseLocation[];
+}

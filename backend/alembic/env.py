@@ -13,6 +13,7 @@ from app.modules.events import models as _events  # noqa: F401
 from app.modules.orders import models as _orders  # noqa: F401
 from app.modules.simulation import models as _simulation  # noqa: F401
 from app.modules.tasks import models as _tasks  # noqa: F401
+from app.modules.warehouse import models as _warehouse  # noqa: F401
 from app.modules.workforce import models as _workforce  # noqa: F401
 
 config = context.config
