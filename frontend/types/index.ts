@@ -2,7 +2,31 @@
 
 export type TaskStatus = "open" | "assigned" | "picked" | "complete";
 
-export type WorkerStatus = "idle" | "busy";
+export type WorkerStatus = "idle" | "busy" | "down" | "offline";
+
+export type WorkerKind = "human" | "robot";
+
+// WorkerOut from /api/v1/workers. Deactivated workers have is_active false and status "offline".
+// version is the compare-and-set counter PATCH sends back as expected_version.
+export interface Worker {
+  worker_id: number;
+  name: string;
+  kind: WorkerKind;
+  status: WorkerStatus;
+  x: number;
+  y: number;
+  speed: number;
+  is_active: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// GET /api/v1/workers response.
+export interface WorkerList {
+  items: Worker[];
+  count: number;
+}
 
 // users.role. "supervisor" matches the course spec; "admin" adds the Setup pages.
 export type Role = "admin" | "supervisor";
