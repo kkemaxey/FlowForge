@@ -10,6 +10,8 @@ const ROLES: { role: Role; label: string }[] = [
   { role: "supervisor", label: "Supervisor" },
 ];
 
+const ADMIN_CONCEPTS = ["/concepts/simulation", "/concepts/layout-editor", "/concepts/system"];
+
 // Dev-only switch between the two portal views (see lib/mockRole.ts).
 export function RoleToggle({ role }: { role: Role }) {
   const router = useRouter();
@@ -18,7 +20,7 @@ export function RoleToggle({ role }: { role: Role }) {
   async function choose(next: Role) {
     await setMockRole(next);
     // A supervisor can't stay on a Setup page; everywhere else just re-render with the new role.
-    if (next === "supervisor" && pathname.startsWith("/admin")) router.push("/403");
+    if (next === "supervisor" && (pathname.startsWith("/admin") || ADMIN_CONCEPTS.includes(pathname))) router.push("/403");
     else router.refresh();
   }
 

@@ -5,6 +5,40 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Console concepts: higher-fidelity, clickable wireframes of where the supervisor
+console and admin back office could go next (2026-11-03). Mock data only; no
+API calls.
+
+### Added
+
+- `/concepts` overview listing each concept, what exists today, what it adds,
+  the sprint goal it serves and the backend work it would need.
+- `/concepts/console` (Console v2): run bar, KPI tiles with targets and
+  sparklines, an SVG floor map with worker markers, travel paths, stockout bins
+  and a congestion layer, a worker inspector, an exception queue with the
+  auto-reassignment trail and one-click fixes, an order-flow strip, worker
+  utilization and an SLA watchlist with expedite.
+- `/concepts/simulation` (admin): start/pause/stop, typed-confirm reset, order
+  rate, seed and assigner validated like `POST /generator/start`, scenario
+  presets, generator status, an exception injector and a same-seed run
+  comparison.
+- `/concepts/layout-editor` (admin): paint cells by click or drag, live checks
+  (station present, storage reachable, stocked bins kept) that block publishing,
+  undo, draft and versions.
+- `/concepts/system` (admin): health verdict, service tiles, a request log keyed
+  by the `X-Request-ID` the backend already logs, event counts, DB and config,
+  and a route catalogue (live on main, on `feature/simulation`, or planned).
+- `components/concepts/ConceptKit.tsx` and `FloorMap.tsx`, and
+  `mocks/conceptMocks.ts` built on the demo warehouse.
+
+### Changed
+
+- The side nav has a "Concepts (future)" section; supervisors only see the
+  overview and Console v2. `proxy.ts` and the role toggle send supervisors on
+  the admin concept pages to `/403`, like `/admin/*`.
+
 ## [0.10.0] - 2026-11-03
 
 Review fixes for the live board and portal (Jayden, 2026-11-03): one

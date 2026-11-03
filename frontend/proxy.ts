@@ -12,5 +12,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/admin/:path*",
+  // The admin-only concept wireframes follow the same rule as the Setup pages.
+  matcher: ["/admin/:path*", "/concepts/simulation", "/concepts/layout-editor", "/concepts/system"],
 };
