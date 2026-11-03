@@ -3,9 +3,6 @@ import type { CellType, Warehouse } from "@/types";
 // Draws any warehouse floor from { width, height, cells[] }, from 5 x 5 up to 60 x 40. Cells are square
 // and the grid scales to fit its container. Cell types differ in color AND shade/pattern (blocked cells are
 // hatched, stations are the darkest), with a legend that spells them out, so nothing relies on color alone.
-//
-// Shared component: the console's grid map (Aalan) can layer workers and tasks on top of it, and the
-// layout editor can reuse it for painting.
 
 const CELL_STYLE: Record<CellType, string> = {
   storage: "bg-blue-300 dark:bg-blue-700",

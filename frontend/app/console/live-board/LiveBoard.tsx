@@ -17,16 +17,8 @@ import { collectExceptions, sortNewestFirst } from "./boardLogic";
 import { KpiStrip } from "./KpiStrip";
 import { useLiveBoard } from "./useLiveBoard";
 
-// Owner: Jayden
-//
-// The live board panel on the supervisor console (Sprint 1 + 2). Top to bottom it shows:
-//   1. a status line (last update time, whether we're on mock data, refresh errors)
-//   2. a red exception banner when a task is stuck (e.g. stockout)
-//   3. the KPI strip: throughput, WIP and on-time %
-//   4. task counts per status
-//   5. the orders table, newest first, with late orders highlighted
-// Data comes from useLiveBoard(), which polls every 2 seconds. This is a Client Component ("use client")
-// because polling needs browser state and timers.
+// The live board panel on the supervisor console. It's a Client Component because polling needs browser
+// state and timers.
 
 // Badge colors per order status.
 const ORDER_BADGE: Record<OrderStatus, string> = {

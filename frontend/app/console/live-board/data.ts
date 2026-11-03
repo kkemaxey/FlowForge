@@ -3,13 +3,9 @@ import type { TaskStatus } from "@/types";
 
 import { mockMetrics, mockOrders, mockTasks, mockThroughput } from "./mockData";
 
-// Owner: Jayden
-//
 // Data layer for the live board. Everything the board shows comes through the three getters at the
 // bottom of this file. The UI never knows whether it is looking at mock data or the real backend, so
 // switching over later only means setting NEXT_PUBLIC_USE_MOCKS=false (no component changes).
-//
-// TODO: move these types into types/index.ts once Kanayo reviews them and the backend schemas exist.
 // Field names are snake_case so they match the FastAPI JSON with no mapping step (see README.md).
 
 // Order lifecycle as the board sees it. "late" means past due_at and not yet complete.

@@ -1,7 +1,5 @@
 import type { ExceptionType, LiveMetrics, Order, Task, ThroughputBucket } from "./data";
 
-// Owner: Jayden
-//
 // The live board's calculations, kept apart from the UI in LiveBoard.tsx (per the course engineering
 // standards: logic lives in its own layer, and the components only display the results). These are
 // plain functions with no React, so they are easy to read and to unit test.

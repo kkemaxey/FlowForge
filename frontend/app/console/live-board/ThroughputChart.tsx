@@ -7,8 +7,6 @@ import { Card } from "@/components/ui/Card";
 import { getThroughput, type ThroughputBucket } from "./data";
 import { summarizeThroughput } from "./boardLogic";
 
-// Owner: Jayden
-//
 // Throughput over time for the metrics page: units picked per minute over the last 30 minutes, as a
 // blue bar chart. A one-line summary and a data table sit underneath so the numbers are readable
 // without the chart (screen readers, or anyone who wants exact values).

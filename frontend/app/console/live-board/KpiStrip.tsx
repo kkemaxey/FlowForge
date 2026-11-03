@@ -1,8 +1,6 @@
 import type { LiveMetrics, Order } from "./data";
 import { onTimeRate, wipTotal } from "./boardLogic";
 
-// Owner: Jayden
-//
 // The three headline numbers across the top of the console: throughput, WIP and on-time %.
 // Pure display: the numbers come from the metrics endpoint and boardLogic.ts.
 
@@ -18,7 +16,6 @@ export function KpiStrip({ metrics, orders }: { metrics: LiveMetrics; orders: Or
         accent="border-l-blue-600"
         detail={`${metrics.tasks_per_hour.toLocaleString()} tasks/hr · last 5 min`}
       />
-      {/* WIP = orders being worked on + tasks handed to workers but not yet picked */}
       <Tile
         label="WIP"
         value={wipTotal(metrics).toLocaleString()}
