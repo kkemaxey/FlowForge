@@ -28,24 +28,18 @@ export function PortalNav({ role, warehouseName }: { role: Role; warehouseName: 
     { href: "/admin/users", label: "Users & roles" },
   ];
 
-  // Future-state wireframes. Admin-only concepts are hidden from supervisors, like Setup.
+  // Future-state wireframes for Trent's areas. Admin-only, like Setup.
   const concepts: NavItem[] = [
     { href: "/concepts", label: "Overview" },
-    { href: "/concepts/console", label: "Console v2" },
-    ...(role === "admin"
-      ? [
-          { href: "/concepts/simulation", label: "Sim control room" },
-          { href: "/concepts/layout-editor", label: "Layout editor" },
-          { href: "/concepts/system", label: "System health" },
-        ]
-      : []),
+    { href: "/concepts/backend", label: "Backend console" },
+    { href: "/concepts/workforce", label: "Workforce" },
   ];
 
   return (
     <nav aria-label="Portal" className="flex flex-col gap-5 text-sm">
       <NavSection title={warehouseName} items={site} pathname={pathname} />
       {role === "admin" && <NavSection title="Setup" items={setup} pathname={pathname} />}
-      <NavSection title="Concepts (future)" items={concepts} pathname={pathname} />
+      {role === "admin" && <NavSection title="Concepts (future)" items={concepts} pathname={pathname} />}
     </nav>
   );
 }

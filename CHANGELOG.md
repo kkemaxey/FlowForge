@@ -7,37 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Console concepts: higher-fidelity, clickable wireframes of where the supervisor
-console and admin back office could go next (2026-11-03). Mock data only; no
-API calls.
+Concepts for Trent's areas (2026-11-03): clickable, mock-data wireframes of
+the backend lane (workforce, deploy, CI, tests) built around the steps still
+open. No API calls.
 
 ### Added
 
-- `/concepts` overview listing each concept, what exists today, what it adds,
-  the sprint goal it serves and the backend work it would need.
-- `/concepts/console` (Console v2): run bar, KPI tiles with targets and
-  sparklines, an SVG floor map with worker markers, travel paths, stockout bins
-  and a congestion layer, a worker inspector, an exception queue with the
-  auto-reassignment trail and one-click fixes, an order-flow strip, worker
-  utilization and an SLA watchlist with expedite.
-- `/concepts/simulation` (admin): start/pause/stop, typed-confirm reset, order
-  rate, seed and assigner validated like `POST /generator/start`, scenario
-  presets, generator status, an exception injector and a same-seed run
-  comparison.
-- `/concepts/layout-editor` (admin): paint cells by click or drag, live checks
-  (station present, storage reachable, stocked bins kept) that block publishing,
-  undo, draft and versions.
-- `/concepts/system` (admin): health verdict, service tiles, a request log keyed
-  by the `X-Request-ID` the backend already logs, event counts, DB and config,
-  and a route catalogue (live on main, on `feature/simulation`, or planned).
-- `components/concepts/ConceptKit.tsx` and `FloorMap.tsx`, and
-  `mocks/conceptMocks.ts` built on the demo warehouse.
+- `/concepts/backend` (Backend console): the seven open steps with what each
+  waits on, then route gates (what the design doc requires vs what main
+  enforces, with a preview of the change), tests and CI by suite, deploy
+  environments and checklist, events → metrics mismatches between main and
+  `feature/simulation`, and the decisions still to settle.
+- `/concepts/workforce`: the workforce panel expanded with a "call as" switch
+  for the proposed auth gates, a position picker with the proposed grid bound
+  (`position_off_grid`), on-demand `version_conflict`, `worker_busy` and
+  `worker_has_open_assignment` cases, the request and response for each action,
+  and per-worker history from the events log.
+- `/concepts` overview, `components/concepts/ConceptKit.tsx` and
+  `mocks/conceptMocks.ts`.
 
 ### Changed
 
-- The side nav has a "Concepts (future)" section; supervisors only see the
-  overview and Console v2. `proxy.ts` and the role toggle send supervisors on
-  the admin concept pages to `/403`, like `/admin/*`.
+- The side nav has an admin-only "Concepts (future)" section. `proxy.ts` and
+  the role toggle send supervisors on `/concepts` to `/403`, like `/admin/*`.
 
 ## [0.10.0] - 2026-11-03
 
