@@ -5,6 +5,60 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-03
+
+Workforce CRUD, by Trent. Supervisors can add, edit and deactivate pickers and
+robots through `/api/v1/workers`, with the same version checks and event
+writes as tasks and orders.
+
+### Added
+
+- `GET /api/v1/workers` (`status`, `kind`, `include_inactive=false`,
+  `limit` 1–500) returning `{items, count}` ordered by id; deactivated workers
+  are hidden unless `include_inactive=true`.
+- `GET /api/v1/workers/{worker_id}` (deactivated workers included); 404
+  `worker_not_found`.
+- `POST /api/v1/workers` (`{name, kind, x, y, speed?}`): 201 with a
+  `Location` header. New workers start `idle`, active, at version 0. Sending
+  `status`, `is_active` or `version` is a 422. A position outside the grid
+  (the largest `x`/`y` in `locations`) is 422 `position_off_grid`; with no
+  locations yet the check is skipped.
+- `PATCH /api/v1/workers/{worker_id}` (`{expected_version, name?, kind?, x?,
+  y?, speed?}`): a compare-and-set on `workers.version` that applies only the
+  fields that differ. Returns 409 `version_conflict`, 409 `worker_busy`
+  (moving a busy worker), 409 `worker_inactive`, or 422 for an explicit
+  `null`. Sending no changes checks the version and returns the worker as is.
+  `status` is not editable; it belongs to the assigner and simulator.
+- `DELETE /api/v1/workers/{worker_id}`: soft delete (`is_active=false`,
+  `status=offline`, version bumped), 204. Returns 409
+  `worker_has_open_assignment` while the worker has an open assignment;
+  deleting an already deactivated worker is a no-op 204.
+- `worker_created`, `worker_updated` (`{"changes": {...}}`) and
+  `worker_deactivated` events, written in the same transaction as the change.
+- `list_idle_workers()` and `get_worker()` in `workforce/service.py` for other
+  modules.
+- Migration `0003`: `workers.version` (default 0) and `workers.updated_at`
+  (existing rows get the migration time).
+- `tests/test_workforce_api.py` and `tests/test_workforce_service.py`
+  (61 tests).
+
+### Changed
+
+- The workforce router moved from the `/workforce` placeholder to
+  `/api/v1/workers`.
+- Root `.gitignore` now ignores `.env`, `.venv/` and `.coverage`.
+
+### Known issues
+
+- Auth is not applied to these endpoints yet (MVP-wide).
+- The assigner's worker status changes (idle ↔ busy) don't bump
+  `workers.version` yet, so a client's `expected_version` doesn't notice them.
+  PATCH and DELETE lock the worker row, so they still see the current status.
+- The database documentation lists a `kind` picker type and a default status
+  of `offline`; the code uses `human`/`robot` and `idle`.
+- The event-type allowlist will need `worker_created`, `worker_updated` and
+  `worker_deactivated`.
+
 ## [0.7.0] - 2026-11-03
 
 Supervisor live board, warehouse grid and portal wireframes, by Jayden.
