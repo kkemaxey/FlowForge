@@ -5,6 +5,28 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-11-03
+
+Auth module endpoints and the supervisor role, by Brock. Firebase proves
+identity (verified by `core/security`); the `users` table maps a UID to an app
+role, and the supervisor gate lives in one dependency rather than spread across
+handlers. Built up over the sprint: the response schema and auth service
+(2026-10-14), the session and me endpoints (2026-10-27), and the shared
+supervisor gate other modules reuse (2026-11-02).
+
+### Added
+
+- `POST /auth/session`: verifies the Firebase token, provisions or syncs the
+  `users` row, and appends a `user_login` event to the events log (2026-10-27).
+- `GET /auth/me`: returns the current user with a derived `is_supervisor` flag,
+  and `404 not_provisioned` before the first session (2026-10-27).
+- `require_supervisor` dependency that other modules add to gate supervisor-only
+  writes; `current_app_user` resolves the caller's `users` row (2026-11-02).
+- `UserOut` response schema and the auth service (`provision_user`,
+  `get_user_by_uid`) (2026-10-14).
+- `tests/test_auth.py`: provision → read, the pre-session `404`, and the
+  unauthenticated `401`, all in the shared `{detail, code}` error shape.
+
 ## [0.8.0] - 2026-11-03
 
 Workforce CRUD, by Trent. Supervisors can add, edit and deactivate pickers and
