@@ -1,17 +1,28 @@
+"""Response bodies for /api/v1/events. The live board reads these shapes."""
 from pydantic import BaseModel
 
-# Reuse the simulation module's timestamp format (UTC, milliseconds, trailing "Z").
-from app.modules.simulation.schemas import UtcDateTime
+from app.core.schemas import UtcDatetime
+from app.modules.simulation.models import ExceptionType
 
 
-class ThroughputOut(BaseModel):
-    """Response of GET /metrics/throughput."""
+class ActiveException(BaseModel):
+    task_id: int
+    order_id: int
+    location: str  # e.g. "A2 (4,2)"
+    type: ExceptionType
+    raised_at: UtcDatetime
 
-    run_id: int
-    window_minutes: int
-    # task_picked events in the window.
-    picks: int
-    # picks / window_minutes.
-    picks_per_min: float
-    # The end of the window (when the count was taken).
-    as_of: UtcDateTime
+
+class LiveMetrics(BaseModel):
+    units_per_hour: int
+    tasks_per_hour: int
+    active_exception: ActiveException | None
+    as_of: UtcDatetime
+
+
+class ThroughputBucket(BaseModel):
+    """What was picked in the minute starting at bucket_start."""
+
+    bucket_start: UtcDatetime
+    units: int
+    tasks: int
