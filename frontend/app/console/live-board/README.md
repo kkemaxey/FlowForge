@@ -22,12 +22,12 @@ time, so restart `npm run dev` after changing them. A Firebase token is attached
 
 ## What the board calls
 
-| Request | Used for | Status |
-|---|---|---|
-| `GET /api/v1/tasks?limit=500` | Tasks, task counts, WIP, exceptions, and which orders to show | Exists |
-| `GET /api/v1/orders/{id}` | One request per order, for the 14 newest order ids found in the tasks | Exists |
-| `GET /api/v1/events/metrics` | Throughput tile and the active exception | Not in the backend yet; the tile shows a dash |
-| `GET /api/v1/events/metrics/throughput?minutes=30` | Metrics page chart | Not in the backend yet; the chart says so |
+| Request | Used for |
+|---|---|
+| `GET /api/v1/tasks?status=…&limit=500` | Task counts, WIP and exceptions. One request each for `open`, `assigned`, `picked` and `exception` |
+| `GET /api/v1/orders?limit=200` | The orders table, WIP and on-time % |
+| `GET /api/v1/events/metrics` | Throughput tile and the active exception |
+| `GET /api/v1/events/metrics/throughput?minutes=30` | Metrics page chart |
 
 Orders and tasks are required: if either fails, the last good data stays on screen with an error. Metrics are
 optional: if they fail, everything else still updates. Every request times out after 8 seconds
@@ -46,16 +46,10 @@ optional: if they fail, everything else still updates. Every request times out a
 | order `open` with any task past `open` | `in_progress` |
 | order `open`, all tasks `open` | `new` |
 
-## Gaps for the backend
+## Known limits
 
-- **No order list.** A `GET /api/v1/orders?limit=14` (newest first) would replace the per-order requests.
-- **No metrics.** Throughput needs completions over time, e.g. `GET /api/v1/events/metrics` returning
-  `{units_per_hour, tasks_per_hour, active_exception, as_of}` and `/throughput` returning
-  `[{bucket_start, units, tasks}]` per minute, oldest first.
-- **No `completed_at` on orders**, so on-time % shows a dash with real data.
-- **No exception type on tasks**, so the banner shows a plain "Exception" for backend tasks.
-- **No `updated_at` in `TaskOut`.** The tasks table has the column; returning it would let the board show when
-  a task last changed. Until then the field is `null` with real data.
-- **Tasks are capped at 500 and sorted by priority, then oldest first.** Past 500 open tasks the newest ones
-  (and their orders) drop off, and task counts, WIP and exceptions come from a partial list. An order list
-  endpoint (above) plus a counts endpoint (tasks per status) would fix both.
+- **Exception type.** `GET /tasks` doesn't return it, so the banner shows a plain "Exception" for most tasks.
+  `GET /api/v1/exceptions` has the type if the banner needs it later.
+- **`updated_at`.** `TaskOut` doesn't return it, so the field is `null` with real data.
+- **Counts are capped.** The Complete count stops at 500 and the orders list at the newest 200, which the seeded
+  stock doesn't reach. A counts endpoint would remove both caps.

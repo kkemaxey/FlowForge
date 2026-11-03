@@ -32,7 +32,6 @@ const ORDER_BADGE: Record<OrderStatus, string> = {
 const TASK_STATUSES: { status: LiveTaskStatus; label: string; className: string }[] = [
   { status: "open", label: "Open", className: "text-zinc-700 dark:text-zinc-300" },
   { status: "assigned", label: "Assigned", className: "text-blue-700 dark:text-blue-400" },
-  { status: "picked", label: "Picked", className: "text-amber-700 dark:text-amber-400" },
   { status: "complete", label: "Complete", className: "text-emerald-700 dark:text-emerald-400" },
   { status: "exception", label: "Exception", className: "text-red-700 dark:text-red-400" },
 ];
@@ -113,7 +112,7 @@ function TaskSummary({ counts }: { counts: Record<LiveTaskStatus, number> }) {
   return (
     <div>
       <h3 className="mb-1.5 text-xs font-medium text-zinc-500">Tasks by status</h3>
-      <div className="grid grid-cols-5 gap-2 text-center">
+      <div className="grid grid-cols-4 gap-2 text-center">
         {TASK_STATUSES.map(({ status, label, className }) => (
           <div key={status} className="rounded-md bg-zinc-50 px-1 py-2 dark:bg-zinc-900">
             <p className={`text-lg font-semibold tabular-nums ${className}`}>{counts[status] ?? 0}</p>

@@ -1,100 +1,139 @@
 # FlowForge Architecture
 
-How the code is organized, who owns each part, and how the parts connect.
-Read this before your first PR.
+How the code is organized and how the parts connect. To run it, see the
+[README](README.md).
 
-Each person owns one vertical slice of the app, and every slice plugs into a
-small shared core that rarely changes. This lets six people work in parallel
-without merge conflicts.
-
-## The three layers
+## The parts
 
 ```
-┌──────────────────────────── FRONTEND (browser, Vercel) ────────────────────────────┐
-│  app/(auth)/login        app/console/…  (grid-map, controls, live-board, workforce)  │
-│          │                          │                                               │
-│          └──────── lib/firebase.ts  +  lib/api-client.ts  (shared) ─────────────────┤
-└───────────────────────────────────┬─────────────────────────────────────────────────┘
-                                    │  HTTP + Firebase token
-┌───────────────────────────────────┴──────── BACKEND (FastAPI, Cloud Run) ───────────┐
-│  main.py  ──includes──►  modules/<feature>/router.py                                │
-│                               │ calls                                               │
-│                          service.py  ──uses──►  models.py  (tables)                 │
-│                                                 schemas.py (request/response shape) │
-│  core/security.py (who's calling?)  core/database.py (DB session)  core/config.py   │
-└───────────────────────────────────┬─────────────────────────────────────────────────┘
-                                    │  SQLAlchemy / Alembic migrations
-                            MySQL (Cloud SQL)
+┌────────────────────── FRONTEND (Next.js, browser) ──────────────────────┐
+│  app/(portal)/console  ── grid map, controls, live board, workforce      │
+│       │ poll every 2 s, or mock data if NEXT_PUBLIC_USE_MOCKS=true       │
+│       └── lib/api-client.ts                                              │
+└───────┬──────────────────────────────────────────────────────────────────┘
+        │ HTTP, port 8080                 ┌───── SIMULATOR (separate process) ┐
+        │ ◄───────────────────────────────┤ simulation/cli.py run             │
+        ▼                                 │ acts as the workers, API only     │
+┌──────────────── BACKEND (FastAPI, Docker) ────────────┐──────────────────┘
+│  main.py ── includes ──► modules/<feature>/router.py   │
+│                               │ calls                  │
+│                          service.py ── models.py       │
+│                                                        │
+│  Background tasks in the same process:                 │
+│    assigner loop (every 2 s), order generator          │
+└───────┬────────────────────────────────────────────────┘
+        │ SQLAlchemy, Alembic migrations
+        ▼
+     MySQL 8.0 (Docker)
 ```
 
-## Who owns what
+The simulator only uses the HTTP API and has no database access, so it goes through the
+same checks as any other client.
 
-Ownership is enforced by [`.github/CODEOWNERS`](.github/CODEOWNERS): a PR that
-touches your folder needs your review.
+Auth is off for the MVP. `core/security.py` and `modules/auth/` exist, but no route
+requires a login. There is one warehouse, so there is no `warehouses` table or
+`warehouse_id`.
 
-| Person | Backend | Frontend | What they build |
-|---|---|---|---|
-| **Kanayo** | `modules/orders/`, `tasks/`, `assignment/` | none | Order intake, turning orders into tasks, the greedy assigner. Also reviews the shared core. |
-| **Kendyn** | `modules/simulation/`, `events/` | none | Moving tasks through their states, exceptions (stockout or worker-down), the event log and metrics |
-| **Brock** | `modules/auth/`, `core/security.py` | `app/(auth)/login/`, `lib/firebase.ts` | Sign-in and the token check that protects every route |
-| **Trent** | `modules/workforce/`, `Dockerfile`, `tests/`, CI | `app/console/workforce/` | Worker/robot CRUD, deploy, CI and test coverage |
-| **Aalan** | none | `app/console/grid-map/`, `controls/` | The warehouse map, and the reassign/expedite buttons |
-| **Jayden** | none | `app/console/live-board/` | Order/task status board, throughput and WIP |
-| **Shared** (Kanayo reviews) | `main.py`, `core/config.py`, `core/database.py`, `alembic/` | `lib/api-client.ts`, `types/`, `components/ui/` | Plumbing everyone uses. Changed rarely and carefully. |
+## Backend modules
 
-## Inside one backend module
-
-Every module in `backend/app/modules/` has the same four files:
-
-| File | Job | Example (workforce) |
+| Module | Job | Tables |
 |---|---|---|
-| `models.py` | Database table definitions | `Worker` table: name, type, speed, x/y, status |
-| `schemas.py` | The shape of JSON going in and out | `WorkerCreate`, `WorkerOut` |
-| `service.py` | The actual logic, with no HTTP details | `create_worker(db, data)`, `list_idle_workers(db)` |
-| `router.py` | Endpoints that call the service | `POST /workforce`, `GET /workforce` |
+| `orders` | Intake, stock allocation, order list, expedite | `orders`, `order_lines` |
+| `tasks` | Task list and `transition()`, the task state machine | `tasks` |
+| `assignment` | Greedy assigner, its 2-second loop, supervisor reassign | `assignments` |
+| `simulation` | Picks, exceptions, rerouting, worker recovery, the simulator | `exceptions`, `sim_runs` |
+| `events` | Metrics worked out from the event log | `events` |
+| `workforce` | Worker create, edit and deactivate | `workers` |
+| `warehouse` | Location list | `locations`, `skus`, `inventory` |
+| `generator` | Streams random orders into intake, as a background task | none |
+| `auth` | `POST /auth/session`, `GET /auth/me` (not yet applied to routes) | `users` |
 
-The flow always goes **router → service → models**. Keep routers thin and put
-logic in `service.py`, so it can be tested without running a server.
+`core/` holds what they share: config, the database session, the `{"detail", "code"}`
+error format, request logging, and the UTC timestamp type.
 
-## How one request moves through the files
+Modules follow the same shape: `router.py` (endpoints), `service.py` (logic),
+`models.py` (tables), `schemas.py` (JSON shapes). Requests go router → service → models,
+so routers stay thin. Services import each other's models and functions where they need
+to, because one action often spans several tables in one transaction.
 
-Example: the live board loads the task list.
-
-1. `frontend/app/console/layout.tsx` checks that a supervisor is signed in,
-   using `lib/firebase.ts`.
-2. `console/live-board/LiveBoard.tsx` calls `apiFetch("/tasks")` in
-   `lib/api-client.ts`, which attaches the Firebase token.
-3. The request reaches the backend. `main.py` has already registered
-   `modules/tasks/router.py`.
-4. The endpoint depends on `core/security.get_current_user`, which verifies the
-   token or returns 401, and on `core/database.get_db`, which opens a session.
-5. The router calls `tasks/service.py`, which queries `tasks/models.py`.
-6. The result is returned in the shape defined in `tasks/schemas.py`, which
-   `frontend/types/index.ts` mirrors.
-
-## How the modules talk to each other
+## How an order moves through the system
 
 ```
-orders ──creates──► tasks ◄──assigns── assignment ◄── idle workers ── workforce
-                      ▲
-                      └── advances state ── simulation ──logs──► events ──metrics──► live-board
+POST /orders ─► orders.service   writes the order and lines, picks bins, reserves stock,
+                                 creates tasks (open), all in one transaction
+                    │
+assigner loop ─► assignment      pairs idle workers with open tasks by Manhattan distance
+                    │            task: open → assigned; worker: idle → busy
+                    ▼
+simulator ──polls── GET /simulation/assignments/active
+    │               walks (distance ÷ speed), then picks (5 s), then one of:
+    ├─ POST /tasks/{id}/pick        removes stock, closes the assignment, frees the
+    │                               worker at the bin, completes the order on its last pick
+    └─ POST /tasks/{id}/exceptions  stockout / jam: moves the task to the nearest bin that
+                                    can cover it, or leaves it in exception for a supervisor
+                                    worker_down: worker goes down, task reopens in place
 ```
 
-- A module calls another module's `service.py` functions, never its routes or
-  tables directly. For example, assignment calls `tasks.service` to get open
-  tasks and `workforce.service` to get idle workers.
-- If your change touches someone else's module, that person reviews the PR.
+Each step writes rows to `events`, which is what the metrics read.
+
+## Task states
+
+Every task status change goes through `transition()` in `tasks/service.py`.
+
+```
+open ──────► assigned ──────► picked (final)
+ ▲  ◄──────── │  ▲ │
+ │            │  └─┘ assigned → assigned: reassigned to another worker
+ │            ▼
+ └──────── exception ───► assigned (supervisor assigns it directly)
+```
+
+Orders are `open` or `complete`. A task never becomes `complete`: `picked` is final.
+The live board labels picked tasks "Complete".
+
+## Staying correct when things race
+
+The assigner, simulator, generator and supervisor all write at once, so:
+
+- **Tasks:** `transition()` is a compare-and-set on `status` and `version`. The loser gets
+  a 409 instead of silently overwriting the winner.
+- **One assignment at a time:** generated columns with unique keys allow at most one open
+  assignment per task and per worker. MySQL has no partial unique indexes.
+- **Stock:** intake and rerouting lock all of a SKU's inventory rows in `location_id` order,
+  so they can't deadlock or over-reserve. The stock math is done in Python, because a
+  stockout can leave more reserved than on hand, and MySQL errors when a subtraction of
+  unsigned columns goes below zero.
+- **Orders:** picks and exceptions lock the order first, so an order's work runs one at a
+  time. This is what stops two simultaneous last picks from leaving an order open forever.
+  Expedite takes its locks in the same order.
+- **Workers:** routine status changes don't bump `workers.version`, which only guards
+  supervisors' edits.
+- **Events:** the table is append-only, enforced by database triggers.
+
+## The frontend
+
+Pages live in `app/(portal)/`, and the console's panels live in `app/console/`.
+
+| Panel | Data |
+|---|---|
+| `grid-map/`, `controls/` | `ConsoleData.tsx`, one shared poll of workers and unfinished tasks |
+| `live-board/` | `useLiveBoard.ts`, its own poll of orders, tasks and metrics |
+| `workforce/` | Loads workers when it opens and after each edit |
+
+Task lists are fetched one status at a time, because `GET /tasks` sorts oldest first and
+finished tasks would otherwise push new ones off the list. `lib/api-client.ts` turns error
+responses into `ApiRequestError`, with the backend's `code` and `detail`.
+
+The Exceptions page, the console's exception feed and the admin pages are still wireframes.
 
 ## Rules of thumb
 
-- **Stay in your own folder.** A new endpoint goes in your `router.py`. A new
-  table goes in your `models.py`, plus an Alembic migration
-  (`alembic revision --autogenerate -m "..."` from `backend/`).
-- **Don't edit `main.py`.** Your router is already included in it.
-- **Keep types in sync.** When your `schemas.py` changes shape, update the
-  matching type in `frontend/types/index.ts`.
-- **Protect console endpoints.** Add `Depends(get_current_user)` from
-  `app.core.security` to every route the console calls.
-- **CI must pass.** Every PR runs backend tests and the frontend lint and build
-  (`.github/workflows/ci.yml`). Add tests for your `service.py` in
-  `backend/tests/`.
+- **Schema changes need a new Alembic migration.** Never edit an existing one.
+- **Change task status only through `transition()`**, and commit it together with the
+  related writes.
+- **Errors:** raise `ApiError(status_code, code, detail)`. A 409 always means a state conflict.
+- **New routes go under `/api/v1`.** `/auth` is the current exception.
+- **Keep types in sync** with the frontend when a `schemas.py` changes.
+- **New modules:** add the router to `ROUTERS` in `main.py`.
+- **Tests run on MySQL** with `docker compose exec backend pytest`, using the `floor`
+  fixture in `tests/conftest.py`.

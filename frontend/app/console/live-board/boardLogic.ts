@@ -40,10 +40,13 @@ export function collectExceptions(tasks: Task[], metrics: LiveMetrics | null): E
   return [...alerts.values()];
 }
 
-/** How many tasks are in each status right now. */
+/**
+ * How many tasks are in each status right now. A picked task counts as complete: picked is the backend's
+ * final task state, and only the mock simulator has a separate picked step.
+ */
 export function countTasksByStatus(tasks: Task[]): Record<LiveTaskStatus, number> {
   const counts: Record<LiveTaskStatus, number> = { open: 0, assigned: 0, picked: 0, complete: 0, exception: 0 };
-  for (const task of tasks) counts[task.status]++;
+  for (const task of tasks) counts[task.status === "picked" ? "complete" : task.status]++;
   return counts;
 }
 

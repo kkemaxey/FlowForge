@@ -106,6 +106,7 @@ interface ApiOrder {
   status: "open" | "complete";
   due_at: string | null;
   created_at: string;
+  completed_at: string | null;
   lines: {
     order_line_id: number;
     sku_code: string;
@@ -149,7 +150,7 @@ function toOrder(o: ApiOrder, now: number): Order {
     status,
     created_at: o.created_at,
     due_at: o.due_at,
-    completed_at: null, // not in the backend response yet, so on-time % shows a dash
+    completed_at: o.completed_at,
     lines: o.lines.map((line) => ({
       id: line.order_line_id,
       order_id: o.order_id,
@@ -161,25 +162,21 @@ function toOrder(o: ApiOrder, now: number): Order {
   };
 }
 
-const MAX_TASKS = 500; // the backend's limit cap
-const MAX_ORDERS = 14; // same table length as the mock board
+const MAX_TASKS = 500; // the backend's limit cap, per status
+// On-time % and WIP are worked out from this list, so it needs to span a whole demo, not just the rows
+// visible in the table. The seeded stock covers well under 200 orders.
+const MAX_ORDERS = 200;
+const TASK_STATUSES: ApiTaskStatus[] = ["open", "assigned", "picked", "exception"];
 
-// getTasks and getOrders both need the task list, and the board calls them together each poll, so a
-// request made in the last second is shared instead of sent twice.
-let recentTasks: { at: number; request: Promise<ApiTask[]> } | null = null;
-
-function fetchTasks(): Promise<ApiTask[]> {
-  const now = Date.now();
-  if (!recentTasks || now - recentTasks.at > 1000) {
-    const request = apiFetch<{ items: ApiTask[]; count: number }>(`/api/v1/tasks?limit=${MAX_TASKS}`).then((page) => page.items);
-    // Don't share a failed request. Only clear the cache if it still holds this request, so a slow
-    // failure can't wipe out a newer one.
-    request.catch(() => {
-      if (recentTasks?.request === request) recentTasks = null;
-    });
-    recentTasks = { at: now, request };
-  }
-  return recentTasks.request;
+// Fetched one status at a time because GET /tasks sorts oldest first: without a status filter, 500 picked
+// tasks would push every new task off the list. Only the picked count can hit the cap, at 500.
+async function fetchTasks(): Promise<ApiTask[]> {
+  const pages = await Promise.all(
+    TASK_STATUSES.map((status) =>
+      apiFetch<{ items: ApiTask[]; count: number }>(`/api/v1/tasks?status=${status}&limit=${MAX_TASKS}`),
+    ),
+  );
+  return pages.flatMap((page) => page.items);
 }
 
 // ---- Getters the board uses ----------------------------------------------------------------------------
@@ -188,17 +185,14 @@ export async function getTasks(): Promise<Task[]> {
   return USE_MOCKS ? mockTasks() : (await fetchTasks()).map(toTask);
 }
 
-// There is no list endpoint for orders yet, so take the newest order ids from the tasks and fetch each one.
 export async function getOrders(): Promise<Order[]> {
   if (USE_MOCKS) return mockOrders();
-  const ids = [...new Set((await fetchTasks()).map((t) => t.order_id))].sort((a, b) => b - a).slice(0, MAX_ORDERS);
-  const orders = await Promise.all(ids.map((id) => apiFetch<ApiOrder>(`/api/v1/orders/${id}`)));
+  const page = await apiFetch<{ items: ApiOrder[]; count: number }>(`/api/v1/orders?limit=${MAX_ORDERS}`);
   const now = Date.now();
-  return orders.map((o) => toOrder(o, now));
+  return page.items.map((o) => toOrder(o, now));
 }
 
-// Optional: the board still works without it. The backend has no metrics endpoint yet, so with real data
-// this request fails and the throughput tile shows a dash.
+// Optional: if this request fails, the rest of the board still updates and the throughput tile shows a dash.
 export function getMetrics(): Promise<LiveMetrics> {
   return USE_MOCKS ? mockMetrics() : apiFetch<LiveMetrics>("/api/v1/events/metrics");
 }

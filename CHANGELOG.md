@@ -5,6 +5,24 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-11-03
+
+Live board fixes and rewritten docs, by Kanayo.
+
+### Changed
+
+- The live board loads orders from `GET /api/v1/orders`, replacing one request
+  per order, and fetches tasks one status at a time, so new tasks and orders
+  keep appearing after 500 tasks.
+- On-time % uses the backend's `completed_at`, so it no longer stays a dash.
+- `README.md` and `ARCHITECTURE.md` rewritten to match the system as built:
+  Docker Compose, auth off, one warehouse, and the current modules.
+
+### Removed
+
+- The live board's Picked box, which was always 0. `picked` is the final task
+  state, and the board counts those tasks under Complete.
+
 ## [0.14.0] - 2026-11-03
 
 Grid map and reassign/expedite controls on the console, by Aalan, connected to
