@@ -2,12 +2,11 @@ import { notFound } from "next/navigation";
 
 import type { CellType, Warehouse, WarehouseLocation } from "@/types";
 
-import warehouseMap from "./warehouse-map.json";
+import { buildDemoWarehouse } from "./demoWarehouse";
 
 // Mock warehouses for the wireframes (no backend calls yet).
 //
-// Warehouse 1 loads warehouse-map.json, a stand-in for the instructor's 20 x 12 map; swap in the real file
-// when we get it. Warehouses 2 and 3 are generated at the smallest and largest allowed sizes so we can
+// Warehouse 1 is the 10 x 10 demo warehouse the backend seeds (see demoWarehouse.ts). Warehouses 2 and 3 are generated at the smallest and largest allowed sizes so we can
 // check the grid renders at 5 x 5 and 60 x 40.
 
 /** Aisle letters A..Z, then AA, AB, ... for wide warehouses. */
@@ -45,7 +44,7 @@ export function buildLayout(width: number, height: number): Pick<Warehouse, "cel
 }
 
 export const MOCK_WAREHOUSES: Warehouse[] = [
-  { id: 1, ...(warehouseMap as Omit<Warehouse, "id">) },
+  buildDemoWarehouse(1),
   { id: 2, name: "Micro-fulfillment pod", width: 5, height: 5, cell_size_m: 1, ...buildLayout(5, 5) },
   { id: 3, name: "Regional DC (max size)", width: 60, height: 40, cell_size_m: 1, ...buildLayout(60, 40) },
 ];

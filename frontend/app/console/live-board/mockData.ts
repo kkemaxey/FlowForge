@@ -1,3 +1,5 @@
+import { DEMO_STOCK, DEMO_WORKERS } from "@/mocks/demoWarehouse";
+
 import type { ActiveException, LiveMetrics, LiveTaskStatus, Order, Task, ThroughputBucket } from "./data";
 
 // Mock data for the live board, used while the backend modules are still empty (NEXT_PUBLIC_USE_MOCKS=true).
@@ -21,8 +23,9 @@ const HISTORY_WINDOW_MS = 30 * 60_000; // completions kept for the metrics page 
 const EXCEPTION_TICKS = 4; // how long a stockout lasts before the task is reassigned
 const MAX_ORDERS = 14; // older completed orders are dropped to keep the table short
 
-const WORKER_IDS = [1, 2, 3, 4, 5, 6];
-const SKUS = ["SKU-1042", "SKU-2210", "SKU-3307", "SKU-4419", "SKU-5523", "SKU-6610", "SKU-7734"];
+// Workers and stock come from the demo warehouse the backend seeds: 5 humans, 5 robots, 20 shoe SKUs.
+const WORKER_IDS = DEMO_WORKERS.map((w) => w.id);
+const skuCode = (id: number) => `SKU-${String(id).padStart(2, "0")}`;
 
 // Everything the simulator remembers between polls.
 interface SimState {
@@ -42,10 +45,8 @@ const sims = new Map<number, SimState>();
 const iso = (ms: number) => new Date(ms).toISOString();
 const pick = <T>(items: T[]) => items[Math.floor(Math.random() * items.length)];
 const randInt = (min: number, max: number) => min + Math.floor(Math.random() * (max - min + 1));
-const randomLocation = () =>
-  `${pick(["A", "B", "C", "D"])}-${String(randInt(1, 12)).padStart(2, "0")}-${randInt(1, 4)}`;
 
-// Creates an order with 1-4 random lines and one open pick task per line.
+// Creates an order with 1-4 random lines, each picked from a stocked bin, and one open pick task per line.
 function addOrder(s: SimState, now: number, dueInMs: number, createdAt = now) {
   const orderId = s.nextOrderId++;
   const order: Order = {
@@ -57,7 +58,9 @@ function addOrder(s: SimState, now: number, dueInMs: number, createdAt = now) {
     lines: [],
   };
   for (let i = randInt(1, 4); i > 0; i--) {
-    const line = { id: s.nextLineId++, order_id: orderId, sku: pick(SKUS), quantity: randInt(1, 5), location: randomLocation() };
+    const bin = pick(DEMO_STOCK);
+    const quantity = randInt(1, Math.min(5, bin.pairs));
+    const line = { id: s.nextLineId++, order_id: orderId, sku: skuCode(bin.skuId), quantity, location: bin.code };
     order.lines.push(line);
     s.tasks.push({
       id: s.nextTaskId++,
