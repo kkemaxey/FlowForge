@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Live board for Sprint 1 and Sprint 2 (Jayden), built on mock data until the
 orders, tasks and events endpoints exist, then reviewed against the course
-Engineering Standards (2026-10-17).
+Engineering Standards (2026-10-17). Then the portal wireframes, warehouse grid
+and the backend's 10 × 10 demo warehouse (2026-11-02).
 
 ### Added
 
@@ -32,16 +33,37 @@ Engineering Standards (2026-10-17).
   `GET /orders`, `GET /tasks` and `GET /events/metrics`.
 - `NEXT_PUBLIC_USE_MOCKS` in `frontend/.env.example` (defaults to `true`).
 - Explanatory comments throughout the live board code.
+- KPI strip (Throughput, WIP, On-time) and a throughput chart on the live
+  board (2026-11-02).
+- `WarehouseGrid` component that draws a warehouse's cells (storage, aisle,
+  station, blocked) with a legend and per-cell tooltips, plus mock warehouses
+  at the smallest (5 × 5) and largest (60 × 40) allowed sizes (2026-11-02).
+- Portal shell: side navigation, a mock Admin/Supervisor role toggle, and a
+  redirect from `/admin` pages to `/403` for supervisors (2026-11-02).
+- Wireframe pages for every portal route: login, warehouses, operations
+  console, orders, exceptions, metrics, and the admin layout, inventory,
+  workforce, simulation, users and new-warehouse pages (2026-11-02).
+- `mocks/demoWarehouse.ts`, the 10 × 10 demo warehouse the backend seeds: pick
+  stations at (3,0) and (6,0), 48 bins in aisles A1–A3 and B1–B3, 20 shoe SKUs
+  stocked in 30 bins, and 5 human and 5 robot workers at their starting
+  positions (2026-11-02).
 
 ### Changed
 
 - Reviewed the live board against the Engineering Standards: moved logic out
   of the UI components into `boardLogic.ts`, and removed an unused
   `"use client"` directive from the polling hook.
+- Warehouse 1 in the mocks is now the backend's 10 × 10 demo warehouse
+  instead of a 20 × 12 stand-in map (2026-11-02).
+- The live board simulator now picks real SKUs from stocked bins (with
+  quantities no larger than the bin holds) and assigns tasks to the 10 demo
+  workers (2026-11-02).
+- Trimmed comments that restated the code or named an owner (2026-11-02).
 
 ### Removed
 
 - Unused `WorkerStatus` re-export from `live-board/data.ts` (dead code).
+- `mocks/warehouse-map.json`, the 20 × 12 stand-in map (2026-11-02).
 
 ### Known issues
 
