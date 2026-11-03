@@ -5,10 +5,79 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-11-03
+
+Supervisor live board, warehouse grid and portal wireframes, by Jayden.
+Built on mock data until the orders, tasks and events endpoints exist, then
+reviewed against the course Engineering Standards (2026-10-17). Then the portal
+wireframes, warehouse grid and the backend's 10 × 10 demo warehouse
+(2026-11-02).
+
+### Added
+
+- Live board panel (`frontend/app/console/live-board/LiveBoard.tsx`): orders
+  table with status badges and highlighted late orders, task counts per
+  status, Throughput (units and tasks per hour) and WIP tiles, and a red
+  exception banner showing the task, location and exception type.
+- `useLiveBoard.ts` hook that polls `GET /orders`, `GET /tasks` and
+  `GET /events/metrics` every 2 seconds, with loading and error states, and
+  stops polling when the board unmounts.
+- `data.ts` with `Order`, `OrderLine`, `Task` and `LiveMetrics` types and
+  `getOrders()`, `getTasks()` and `getMetrics()`, which return mock data or
+  call the backend through `apiFetch`.
+- `mockData.ts`, an in-browser warehouse simulator (orders arriving, tasks
+  moving open → assigned → picked → complete, occasional stockouts that are
+  reassigned, late orders) so the board updates without a backend.
+- `boardLogic.ts` holding the board's calculations (exception list, WIP total,
+  order sorting) as plain functions, separate from the UI.
+- `live-board/README.md` listing the exact JSON shapes the board expects from
+  `GET /orders`, `GET /tasks` and `GET /events/metrics`.
+- `NEXT_PUBLIC_USE_MOCKS` in `frontend/.env.example` (defaults to `true`).
+- Explanatory comments throughout the live board code.
+- KPI strip (Throughput, WIP, On-time) and a throughput chart on the live
+  board (2026-11-02).
+- `WarehouseGrid` component that draws a warehouse's cells (storage, aisle,
+  station, blocked) with a legend and per-cell tooltips, plus mock warehouses
+  at the smallest (5 × 5) and largest (60 × 40) allowed sizes (2026-11-02).
+- Portal shell: side navigation, a mock Admin/Supervisor role toggle, and a
+  redirect from `/admin` pages to `/403` for supervisors (2026-11-02).
+- Wireframe pages for every portal route: login, warehouses, operations
+  console, orders, exceptions, metrics, and the admin layout, inventory,
+  workforce, simulation, users and new-warehouse pages (2026-11-02).
+- `mocks/demoWarehouse.ts`, the 10 × 10 demo warehouse the backend seeds: pick
+  stations at (3,0) and (6,0), 48 bins in aisles A1–A3 and B1–B3, 20 shoe SKUs
+  stocked in 30 bins, and 5 human and 5 robot workers at their starting
+  positions (2026-11-02).
+
+### Changed
+
+- Reviewed the live board against the Engineering Standards: moved logic out
+  of the UI components into `boardLogic.ts`, and removed an unused
+  `"use client"` directive from the polling hook.
+- Warehouse 1 in the mocks is now the backend's 10 × 10 demo warehouse
+  instead of a 20 × 12 stand-in map (2026-11-02).
+- The live board simulator now picks real SKUs from stocked bins (with
+  quantities no larger than the bin holds) and assigns tasks to the 10 demo
+  workers (2026-11-02).
+- Trimmed comments that restated the code or named an owner (2026-11-02).
+- Regenerated `frontend/package-lock.json` so `npm ci` (and the frontend CI
+  job) installs again (2026-11-02).
+
+### Removed
+
+- Unused `WorkerStatus` re-export from `live-board/data.ts` (dead code).
+- `mocks/warehouse-map.json`, the 20 × 12 stand-in map (2026-11-02).
+
+### Known issues
+
+- The live board types live in `live-board/data.ts` until they are reviewed
+  for the shared `types/index.ts`; the shared `TaskStatus` has no `exception`
+  value yet.
+
 ## [0.6.0] - 2026-11-02
 
-Supervisor overrides and the order generator: reassign, expedite, and a
-seeded order stream that runs inside the backend.
+Supervisor overrides and the order generator, by Kanayo: reassign, expedite,
+and a seeded order stream that runs inside the backend.
 
 ### Added
 
@@ -59,7 +128,8 @@ seeded order stream that runs inside the backend.
 
 ## [0.5.0] - 2026-10-29
 
-Greedy assigner with a background loop, and one error format for every route.
+Greedy assigner with a background loop, and one error format for every route,
+by Kanayo.
 
 ### Added
 
@@ -100,7 +170,7 @@ Greedy assigner with a background loop, and one error format for every route.
 
 ## [0.4.0] - 2026-10-21
 
-Order intake and the task state machine.
+Order intake and the task state machine, by Kanayo.
 
 ### Added
 
@@ -156,7 +226,8 @@ Order intake and the task state machine.
 
 ## [0.3.0] - 2026-10-14
 
-Local Docker stack, the full database schema and a seeded shoe warehouse.
+Local Docker stack, the full database schema and a seeded shoe warehouse, by
+Kanayo.
 
 ### Added
 
@@ -205,8 +276,8 @@ Local Docker stack, the full database schema and a seeded shoe warehouse.
 
 ## [0.2.0] - 2026-09-30
 
-Sprint 0 foundation filled in: a runnable backend and frontend skeleton, CI
-and deploy files.
+Sprint 0 foundation filled in, by Kanayo: a runnable backend and frontend
+skeleton, CI and deploy files.
 
 ### Added
 
@@ -266,7 +337,7 @@ and deploy files.
 
 ## [0.1.0] - 2026-09-17
 
-Sprint 0 foundation: monorepo skeleton in the feature-folder layout.
+Sprint 0 foundation, by Kanayo: monorepo skeleton in the feature-folder layout.
 
 ### Added
 
@@ -301,7 +372,7 @@ Sprint 0 foundation: monorepo skeleton in the feature-folder layout.
 
 ## [0.0.1] - 2026-09-13
 
-Initial "running server with one endpoint" assignment.
+Initial "running server with one endpoint" assignment, by Kanayo.
 
 ### Added
 
