@@ -5,7 +5,7 @@ All notable changes to FlowForge are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0] - 2026-11-03
 
 Review fixes for the live board and portal (Jayden, 2026-11-03): one
 warehouse, the real `/api/v1` backend shapes, and a board that keeps working
@@ -41,6 +41,104 @@ without the metrics endpoint.
   `?warehouse_id=` param, and the 5 × 5 and 60 × 40 test warehouses.
 - The old `/console` scaffold page and its Firebase sign-in gate; the portal
   console replaces it. Sign-in is part of Brock's login work.
+
+## [0.9.0] - 2026-11-03
+
+Auth module endpoints and the supervisor role, by Brock. Firebase proves
+identity (verified by `core/security`); the `users` table maps a UID to an app
+role, and the supervisor gate lives in one dependency rather than spread across
+handlers. Built up over the sprint: the response schema and auth service
+(2026-10-14), the session and me endpoints (2026-10-27), and the shared
+supervisor gate other modules reuse (2026-11-02).
+
+### Added
+
+- `POST /auth/session`: verifies the Firebase token, provisions or syncs the
+  `users` row, and appends a `user_login` event to the events log (2026-10-27).
+- `GET /auth/me`: returns the current user with a derived `is_supervisor` flag,
+  and `404 not_provisioned` before the first session (2026-10-27).
+- `require_supervisor` dependency that other modules add to gate supervisor-only
+  writes; `current_app_user` resolves the caller's `users` row (2026-11-02).
+- `UserOut` response schema and the auth service (`provision_user`,
+  `get_user_by_uid`) (2026-10-14).
+- `tests/test_auth.py`: provision → read, the pre-session `404`, and the
+  unauthenticated `401`, all in the shared `{detail, code}` error shape.
+
+## [0.8.0] - 2026-11-03
+
+Workforce CRUD, by Trent. Supervisors can add, edit and deactivate pickers and
+robots through `/api/v1/workers`, with the same version checks and event
+writes as tasks and orders.
+
+### Added
+
+- `GET /api/v1/workers` (`status`, `kind`, `include_inactive=false`,
+  `limit` 1–500) returning `{items, count}` ordered by id; deactivated workers
+  are hidden unless `include_inactive=true`.
+- `GET /api/v1/workers/{worker_id}` (deactivated workers included); 404
+  `worker_not_found`.
+- `POST /api/v1/workers` (`{name, kind, x, y, speed?}`): 201 with a
+  `Location` header. New workers start `idle`, active, at version 0. Sending
+  `status`, `is_active` or `version` is a 422, as is a negative `x` or `y`.
+- `PATCH /api/v1/workers/{worker_id}` (`{expected_version, name?, kind?, x?,
+  y?, speed?}`): a compare-and-set on `workers.version` that applies only the
+  fields that differ. Returns 409 `version_conflict`, 409 `worker_busy`
+  (moving a busy worker), 409 `worker_inactive`, or 422 for an explicit
+  `null`. Sending no changes checks the version and returns the worker as is.
+  `status` is not editable; it belongs to the assigner and simulator.
+- `DELETE /api/v1/workers/{worker_id}`: soft delete (`is_active=false`,
+  `status=offline`, version bumped), 204. Returns 409
+  `worker_has_open_assignment` while the worker has an open assignment;
+  deleting an already deactivated worker is a no-op 204.
+- `worker_created`, `worker_updated` (`{"changes": {...}}`) and
+  `worker_deactivated` events, written in the same transaction as the change.
+- `list_idle_workers()` and `get_worker()` in `workforce/service.py` for other
+  modules.
+- Migration `0003`: `workers.version` (default 0) and `workers.updated_at`
+  (existing rows get the migration time).
+- `tests/test_workforce_api.py` and `tests/test_workforce_service.py`
+  (51 tests).
+- Workforce panel on `/console` (`frontend/app/console/workforce/`): worker
+  table with a "Show deactivated" toggle, add/edit form with field-level
+  validation messages, and deactivate with an inline confirm. Works against
+  `/api/v1/workers` or an in-browser mock with the same rules
+  (`NEXT_PUBLIC_USE_MOCKS`).
+- Request logging (`core/request_logging.py`, registered in `main.py`): one
+  `request received` line and one `request completed` line (status, duration)
+  per request on the `uvicorn.error` logger, tied together by a request id
+  that is taken from `X-Request-ID` or generated, and echoed back. Bodies and
+  query strings are never logged. Tests in `tests/test_request_logging.py`.
+
+### Changed
+
+- The workforce router moved from the `/workforce` placeholder to
+  `/api/v1/workers`.
+- Root `.gitignore` now ignores `.env`, `.venv/` and `.coverage`.
+- `frontend/lib/api-client.ts`: `apiFetch` returns `undefined` for a 204 and
+  throws `ApiRequestError` (`status`, `code`, `detail`, `errors`) on errors;
+  the error message is unchanged. `WorkerStatus` now includes `down` and
+  `offline`.
+- CI: the backend job now starts MySQL 8.0 (with `docker-compose.yml`'s server
+  flags and a random per-run password) and sets `TEST_DATABASE_URL`, so the
+  database tests run instead of being skipped. Before this, CI was green while
+  running 12 of the 180 backend tests. A new `docker` job builds
+  `backend/Dockerfile`.
+
+### Known issues
+
+- Auth is not applied to these endpoints yet (MVP-wide).
+- Positions have no upper bound: nothing in the schema records the warehouse's
+  size (`locations` has only bins and stations, so its largest `x`/`y` misses
+  walkway column 9 and the robots' row 9). Proposed: `WAREHOUSE_WIDTH` and
+  `WAREHOUSE_HEIGHT` settings (default 10 × 10) and a 422 `position_off_grid`
+  check, to agree with Kanayo since it touches `core/config.py`.
+- The assigner's worker status changes (idle ↔ busy) don't bump
+  `workers.version` yet, so a client's `expected_version` doesn't notice them.
+  PATCH and DELETE lock the worker row, so they still see the current status.
+- The database documentation lists a `kind` picker type and a default status
+  of `offline`; the code uses `human`/`robot` and `idle`.
+- The event-type allowlist will need `worker_created`, `worker_updated` and
+  `worker_deactivated`.
 
 ## [0.7.0] - 2026-11-03
 

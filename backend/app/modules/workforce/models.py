@@ -38,4 +38,7 @@ class Worker(Base):
     speed: Mapped[float] = mapped_column(Float, default=1.0, server_default="1")
     # Soft delete: deactivating keeps assignment history intact.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+    # Bumped on every change; PATCH and DELETE compare-and-set on it (409 version_conflict).
+    version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(Timestamp3, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(Timestamp3, default=utcnow, onupdate=utcnow)

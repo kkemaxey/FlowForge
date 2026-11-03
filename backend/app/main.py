@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.errors import register_error_handlers
+from app.core.request_logging import register_request_logging
 from app.modules.assignment.loop import assigner_loop
 from app.modules.assignment.router import router as assignment_router
 from app.modules.auth.router import router as auth_router
@@ -57,6 +58,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Added last so it wraps everything else, including CORS preflight responses.
+    register_request_logging(app)
 
     @app.get("/health", tags=["ops"])
     def health() -> dict[str, str]:

@@ -1,6 +1,11 @@
 import { Card } from "@/components/ui/Card";
 
-// Owner: Trent
+import { WorkforceManager } from "./WorkforceManager";
+
 export function WorkforcePanel() {
-  return <Card title="Workforce">Worker and robot management will go here.</Card>;
+  return (
+    <Card title="Workforce">
+      <WorkforceManager />
+    </Card>
+  );
 }

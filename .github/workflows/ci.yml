@@ -13,13 +13,44 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+      # The database tests need MySQL; without TEST_DATABASE_URL they are skipped (conftest.py).
+      # Same server flags as docker-compose.yml: --skip-log-bin lets the app user create the
+      # events triggers in migration 0002. The password is random per run, never stored.
+      - name: Start MySQL
+        run: |
+          DB_PASSWORD="$(openssl rand -hex 16)"
+          echo "::add-mask::$DB_PASSWORD"
+          echo "TEST_DATABASE_URL=mysql+pymysql://flowforge:${DB_PASSWORD}@127.0.0.1:3306/flowforge_test" >> "$GITHUB_ENV"
+          docker run -d --name mysql -p 3306:3306 \
+            -e MYSQL_ROOT_PASSWORD="$(openssl rand -hex 16)" \
+            -e MYSQL_DATABASE=flowforge_test -e MYSQL_USER=flowforge -e MYSQL_PASSWORD="$DB_PASSWORD" \
+            mysql:8.0 \
+            --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci \
+            --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION \
+            --default-time-zone=+00:00 --skip-log-bin
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
+      - name: Wait for MySQL
+        # Logging in as the app user over TCP only works once first-time setup has finished.
+        run: |
+          for i in $(seq 1 60); do
+            python -c "import os, sqlalchemy as sa; sa.create_engine(os.environ['TEST_DATABASE_URL']).connect().close()" 2>/dev/null && exit 0
+            sleep 2
+          done
+          docker logs mysql | tail -20
+          exit 1
       - run: pytest
+
+  docker:
+    # backend/Dockerfile must keep building; the image is what Cloud Run deploys.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t flowforge-backend backend
 
   frontend:
     runs-on: ubuntu-latest
