@@ -15,7 +15,7 @@ import os
 import random
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 
 import httpx
 
@@ -103,12 +103,6 @@ class Simulator:
         """Make the task's current (or next) assignment end in this exception when it comes due."""
         self.forced[task_id] = outcome
 
-    def start_run(self) -> int:
-        """Start a new simulation run so this session's events and metrics are grouped together."""
-        # The run records our seed and every setting, so it can be reproduced later.
-        body = checked(self.client.post(f"{API}/simulation/runs", json={"seed": self.config.seed, "config": asdict(self.config)})).json()
-        return body["run_id"]
-
     def _plan(self, assignment: dict, now: float) -> Plan:
         """Decide how long this assignment takes and how it ends."""
         # Manhattan distance: cells across + cells up/down (workers can't walk diagonally).
@@ -150,7 +144,7 @@ class Simulator:
         # 1. Bring back any workers whose downtime is over.
         self._recover_workers(now)
         # 2. Ask the API what everyone is working on.
-        active = checked(self.client.get(f"{API}/simulation/assignments/active")).json()
+        active = checked(self.client.get(f"{API}/simulation/assignments/active")).json()["items"]
         active_ids = {a["assignment_id"] for a in active}
         # Forget plans for assignments that are no longer active (finished, reassigned, ...).
         self.plans = {aid: plan for aid, plan in self.plans.items() if aid in active_ids}
@@ -208,7 +202,11 @@ class Simulator:
         ticks = 0
         while max_ticks is None or ticks < max_ticks:
             started = time.monotonic()
-            self.tick()
+            try:
+                self.tick()
+            except (httpx.HTTPError, ApiCallError) as exc:
+                # The API hiccupped (e.g. the dev server reloading). Keep the demo going; retry next tick.
+                log.warning("tick failed, retrying: %s", exc)
             ticks += 1
             # Sleep for the rest of the tick interval (minus however long the tick took).
             time.sleep(max(0.0, self.config.tick_seconds - (time.monotonic() - started)))
@@ -217,7 +215,7 @@ class Simulator:
 def trigger_exception(client: httpx.Client, task_id: int, type: str, qty_found: int | None = None) -> dict:
     """Raise an exception on a task's active assignment right now (demo control)."""
     # Find the task's active assignment.
-    active = checked(client.get(f"{API}/simulation/assignments/active")).json()
+    active = checked(client.get(f"{API}/simulation/assignments/active")).json()["items"]
     assignment = next((a for a in active if a["task_id"] == task_id), None)
     if assignment is None:
         raise ValueError(f"Task {task_id} has no active assignment")

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.modules.simulation import service
 from app.modules.simulation.schemas import (
+    ActiveAssignmentListOut,
     ExceptionCreate,
     ExceptionListOut,
     ExceptionOut,
@@ -37,6 +38,12 @@ def list_exceptions(
 ) -> ExceptionListOut:
     """Exceptions, newest first."""
     return service.list_exceptions(db, only_open, limit)
+
+
+@router.get("/simulation/assignments/active", response_model=ActiveAssignmentListOut)
+def list_active_assignments(db: Session = Depends(get_db)) -> ActiveAssignmentListOut:
+    """Who is working on what. The simulator polls this every tick."""
+    return service.active_assignments(db)
 
 
 @router.post("/simulation/workers/{worker_id}/recover", response_model=WorkerRecoveredOut)

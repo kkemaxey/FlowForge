@@ -79,3 +79,30 @@ class ExceptionListOut(BaseModel):
 class WorkerRecoveredOut(BaseModel):
     worker_id: int
     status: WorkerStatus
+
+
+class ActiveAssignmentOut(BaseModel):
+    """Everything the simulator needs to time and finish one pick."""
+
+    assignment_id: int
+    task_id: int
+    order_id: int
+    worker_id: int
+    # Where the worker is standing now, and how fast they move (grid cells per second).
+    worker_x: int
+    worker_y: int
+    worker_speed: float
+    # The bin they're walking to.
+    location_id: int
+    location_x: int
+    location_y: int
+    sku_code: str
+    qty: int
+    # How many units the bin really holds. If less than qty, the simulator raises a stockout.
+    bin_on_hand: int
+    assigned_at: UtcDatetime
+
+
+class ActiveAssignmentListOut(BaseModel):
+    items: list[ActiveAssignmentOut]
+    count: int  # number of items in this response

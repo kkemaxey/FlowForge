@@ -5,7 +5,7 @@ database is never left half-updated. Task status changes go through tasks.servic
 """
 from datetime import datetime
 
-from sqlalchemy import case, func, select, update
+from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.database import utcnow
@@ -15,6 +15,8 @@ from app.modules.events.models import Event
 from app.modules.orders.models import Order, OrderStatus
 from app.modules.simulation.models import ExceptionType, TaskException
 from app.modules.simulation.schemas import (
+    ActiveAssignmentListOut,
+    ActiveAssignmentOut,
     ExceptionCreate,
     ExceptionListItem,
     ExceptionListOut,
@@ -24,7 +26,7 @@ from app.modules.simulation.schemas import (
 )
 from app.modules.tasks.models import Task, TaskStatus
 from app.modules.tasks.service import transition
-from app.modules.warehouse.models import Inventory, Location
+from app.modules.warehouse.models import Inventory, Location, Sku
 from app.modules.workforce.models import Worker, WorkerStatus
 
 
@@ -366,6 +368,41 @@ def list_exceptions(session: Session, only_open: bool | None, limit: int) -> Exc
         for exception, order_id, task_status in rows
     ]
     return ExceptionListOut(items=items, count=len(items))
+
+
+def active_assignments(session: Session) -> ActiveAssignmentListOut:
+    """Every assignment in progress, with its worker, bin and stock, in one query."""
+    rows = session.execute(
+        select(Assignment, Task, Worker, Location, Sku.code, func.coalesce(Inventory.qty_on_hand, 0))
+        .join(Task, Task.id == Assignment.task_id)
+        .join(Worker, Worker.id == Assignment.worker_id)
+        .join(Location, Location.id == Task.location_id)
+        .join(Sku, Sku.id == Task.sku_id)
+        # An outer join, so a bin with no inventory row still shows up, holding 0.
+        .outerjoin(Inventory, and_(Inventory.sku_id == Task.sku_id, Inventory.location_id == Task.location_id))
+        .where(Assignment.ended_at.is_(None))
+        .order_by(Assignment.id)
+    )
+    items = [
+        ActiveAssignmentOut(
+            assignment_id=assignment.id,
+            task_id=task.id,
+            order_id=task.order_id,
+            worker_id=worker.id,
+            worker_x=worker.x,
+            worker_y=worker.y,
+            worker_speed=worker.speed,
+            location_id=location.id,
+            location_x=location.x,
+            location_y=location.y,
+            sku_code=sku_code,
+            qty=task.qty,
+            bin_on_hand=on_hand,
+            assigned_at=assignment.assigned_at,
+        )
+        for assignment, task, worker, location, sku_code, on_hand in rows
+    ]
+    return ActiveAssignmentListOut(items=items, count=len(items))
 
 
 def recover_worker(session: Session, worker_id: int) -> WorkerRecoveredOut:
