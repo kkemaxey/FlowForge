@@ -28,7 +28,7 @@ from app.modules.assignment.schemas import (
 )
 from app.modules.events.models import Event
 from app.modules.orders.models import Order
-from app.modules.simulation.models import SimRun
+from app.modules.simulation.models import SimRun, TaskException
 from app.modules.tasks.models import Task, TaskStatus
 from app.modules.tasks.service import TaskConflict, transition
 from app.modules.warehouse.models import Location
@@ -191,7 +191,8 @@ def reassign(session: Session, task_id: int, request: ReassignRequest) -> Reassi
     """Supervisor override: give a task to a specific idle worker, in one transaction.
 
     If the task has an open assignment, it is closed with outcome 'reassigned' and its worker is
-    freed. If it has none (open, or stuck in exception), the task is assigned directly. Raises
+    freed. If it has none (open, or stuck in exception), the task is assigned directly, and a stuck
+    task's open exception is marked resolved. Raises
     404 if the task or worker doesn't exist, 409 if the expected_version is stale, the task is
     picked, the target worker isn't idle and active, or a concurrent write wins the unique keys.
     """
@@ -216,6 +217,7 @@ def _reassign(session: Session, task_id: int, request: ReassignRequest) -> Reass
 
     # Compare-and-set on the version the supervisor saw. picked -> assigned is not an allowed
     # move, so a finished task is rejected here with invalid_transition.
+    was_stuck = task.status is TaskStatus.exception
     transition(session, task, task.status, TaskStatus.assigned, expected_version=request.expected_version)
 
     # Claim the target before freeing anyone, so "reassign to the worker who already has it" is
@@ -252,6 +254,17 @@ def _reassign(session: Session, task_id: int, request: ReassignRequest) -> Reass
     session.flush()
 
     order_run_id = session.scalar(select(Order.run_id).where(Order.id == task.order_id))
+    if was_stuck:
+        resolved = session.execute(
+            update(TaskException)
+            .where(TaskException.task_id == task.id, TaskException.resolved_at.is_(None))
+            .values(resolved_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if resolved.rowcount > 0:
+            session.add(
+                Event(event_type="exception_resolved", run_id=order_run_id, order_id=task.order_id, task_id=task.id)
+            )
     session.add(
         Event(
             event_type="task_reassigned" if previous is not None else "task_assigned",
