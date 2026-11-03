@@ -2,6 +2,9 @@ import { FIREBASE_CONFIGURED, getFirebaseAuth } from "@/lib/firebase";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
+// A request that hasn't answered by then is aborted, so one hung call can't stall the live board's polling.
+const TIMEOUT_MS = 8000;
+
 type ApiOptions = RequestInit & { auth?: boolean };
 
 /**
@@ -17,7 +20,7 @@ export async function apiFetch<T>(path: string, { auth = true, ...init }: ApiOpt
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers });
+  const response = await fetch(`${API_URL}${path}`, { ...init, headers, signal: init.signal ?? AbortSignal.timeout(TIMEOUT_MS) });
   if (!response.ok) {
     throw new Error(`${init.method ?? "GET"} ${path} failed: ${response.status}`);
   }

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { PortalNav } from "@/components/portal/PortalNav";
 import { RoleToggle } from "@/components/portal/RoleToggle";
 import { parseRole, ROLE_COOKIE, ROLE_TOGGLE_ENABLED } from "@/lib/mockRole";
+import { USE_MOCKS } from "@/app/console/live-board/data";
 import { DEMO_WAREHOUSE } from "@/mocks/demoWarehouse";
 
 // The one nav shell every portal page shares. Admin view = supervisor view + the Setup section.
@@ -20,7 +21,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
             FlowForge
           </Link>
           <span className="rounded border border-dashed border-orange-300 bg-orange-50 px-1.5 py-0.5 text-xs text-orange-800 dark:border-orange-800 dark:bg-orange-950 dark:text-orange-300">
-            Wireframe · mock data
+            {USE_MOCKS ? "Wireframe · mock data" : "Wireframe · live API"}
           </span>
         </div>
         {ROLE_TOGGLE_ENABLED ? (

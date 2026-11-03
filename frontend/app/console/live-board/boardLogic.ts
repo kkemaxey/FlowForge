@@ -24,7 +24,7 @@ export function collectExceptions(tasks: Task[], metrics: LiveMetrics | null): E
         taskId: task.id,
         orderId: task.order_id,
         location: task.location,
-        type: task.exception_type ?? "stockout",
+        type: task.exception_type ?? "unknown",
       });
     }
   }

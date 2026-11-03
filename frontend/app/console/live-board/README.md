@@ -30,14 +30,15 @@ time, so restart `npm run dev` after changing them. A Firebase token is attached
 | `GET /api/v1/events/metrics/throughput?minutes=30` | Metrics page chart | Not in the backend yet; the chart says so |
 
 Orders and tasks are required: if either fails, the last good data stays on screen with an error. Metrics are
-optional: if they fail, everything else still updates.
+optional: if they fail, everything else still updates. Every request times out after 8 seconds
+(`lib/api-client.ts`), so a hung call can't stop the polling.
 
 ## How `data.ts` maps the backend
 
 | Backend | Board |
 |---|---|
 | `task_id`, `sku_code`, `qty` | `id`, `sku`, `quantity` |
-| `location` `{location_id, x, y, zone, aisle}` | `location` label like `"A3 (7,3)"` (the backend has no bin code) |
+| `location` `{location_id, x, y, zone, aisle}` | `location` label like `"A3 (7,3)"` (the backend has no bin code); an order line split across bins lists each one |
 | `current_assignment.worker_id` | `worker_id` (`null` when unassigned) |
 | task `picked` (final state) | `complete` |
 | order `complete` | `complete` |
@@ -52,4 +53,9 @@ optional: if they fail, everything else still updates.
   `{units_per_hour, tasks_per_hour, active_exception, as_of}` and `/throughput` returning
   `[{bucket_start, units, tasks}]` per minute, oldest first.
 - **No `completed_at` on orders**, so on-time % shows a dash with real data.
-- **No exception type on tasks**, so the banner labels every exception a stockout.
+- **No exception type on tasks**, so the banner shows a plain "Exception" for backend tasks.
+- **No `updated_at` in `TaskOut`.** The tasks table has the column; returning it would let the board show when
+  a task last changed. Until then the field is `null` with real data.
+- **Tasks are capped at 500 and sorted by priority, then oldest first.** Past 500 open tasks the newest ones
+  (and their orders) drop off, and task counts, WIP and exceptions come from a partial list. An order list
+  endpoint (above) plus a counts endpoint (tasks per status) would fix both.

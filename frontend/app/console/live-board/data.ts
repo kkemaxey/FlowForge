@@ -14,7 +14,8 @@ export type OrderStatus = "new" | "in_progress" | "complete" | "late";
 // The shared TaskStatus has no "exception" yet; the live board needs it for the exception flow.
 export type LiveTaskStatus = TaskStatus | "exception";
 
-export type ExceptionType = "stockout" | "worker_down";
+// "unknown" is used when the backend doesn't say what caused the exception (it doesn't record a type on tasks yet).
+export type ExceptionType = "stockout" | "jam" | "worker_down" | "unknown";
 
 // One line item on an order (a SKU and quantity). The backend turns each line into one or more pick tasks.
 export interface OrderLine {
@@ -22,7 +23,7 @@ export interface OrderLine {
   order_id: number;
   sku: string;
   quantity: number;
-  location: string;
+  location: string; // every bin the line is picked from, e.g. "A2 (4,2), B3 (7,6)" when it is split
 }
 
 export interface Order {
@@ -45,7 +46,7 @@ export interface Task {
   status: LiveTaskStatus;
   worker_id: number | null;
   exception_type: ExceptionType | null;
-  updated_at: string;
+  updated_at: string | null; // null with real data: the backend doesn't return it yet
 }
 
 // The exception currently blocking work (e.g. a stockout at a location), reported by the metrics endpoint.
@@ -130,7 +131,7 @@ function toTask(t: ApiTask): Task {
     status: taskStatus(t.status),
     worker_id: t.current_assignment?.worker_id ?? null,
     exception_type: null, // the backend doesn't record the exception type yet
-    updated_at: t.current_assignment?.assigned_at ?? t.created_at,
+    updated_at: null, // the backend has updated_at but doesn't return it; assigned_at would be wrong after a pick
   };
 }
 
@@ -154,7 +155,8 @@ function toOrder(o: ApiOrder, now: number): Order {
       order_id: o.order_id,
       sku: line.sku_code,
       quantity: line.qty_ordered,
-      location: line.tasks[0] ? locationLabel(line.tasks[0].location) : "",
+      // A line can be split across bins, so list every distinct location its tasks pick from.
+      location: [...new Set(line.tasks.map((t) => locationLabel(t.location)))].join(", "),
     })),
   };
 }
@@ -170,7 +172,11 @@ function fetchTasks(): Promise<ApiTask[]> {
   const now = Date.now();
   if (!recentTasks || now - recentTasks.at > 1000) {
     const request = apiFetch<{ items: ApiTask[]; count: number }>(`/api/v1/tasks?limit=${MAX_TASKS}`).then((page) => page.items);
-    request.catch(() => (recentTasks = null)); // don't share a failed request
+    // Don't share a failed request. Only clear the cache if it still holds this request, so a slow
+    // failure can't wipe out a newer one.
+    request.catch(() => {
+      if (recentTasks?.request === request) recentTasks = null;
+    });
     recentTasks = { at: now, request };
   }
   return recentTasks.request;

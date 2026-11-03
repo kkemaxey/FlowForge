@@ -39,7 +39,9 @@ const TASK_STATUSES: { status: LiveTaskStatus; label: string; className: string 
 
 const EXCEPTION_LABEL: Record<ExceptionType, string> = {
   stockout: "Stockout",
+  jam: "Jam",
   worker_down: "Worker down",
+  unknown: "Exception",
 };
 
 const formatTime = (value: string | Date | null) =>

@@ -262,7 +262,7 @@ export async function mockMetrics(): Promise<LiveMetrics> {
         order_id: exceptionTask.order_id,
         location: exceptionTask.location,
         type: exceptionTask.exception_type ?? "stockout",
-        raised_at: exceptionTask.updated_at,
+        raised_at: exceptionTask.updated_at ?? iso(now),
       }
     : null;
 
